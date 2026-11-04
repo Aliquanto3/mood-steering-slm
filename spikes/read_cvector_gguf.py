@@ -141,7 +141,7 @@ def generate(model: str, out: str) -> None:
         subprocess.run(cmd, check=True)
 
 
-def _cli_text(model: str, vec: str | None, n_predict: int, seed: int) -> str:
+def _cli_text(model: str, vec: str | None, n_predict: int, seed: int, scale: float) -> str:
     exe = os.environ.get("LLAMA_COMPLETION")
     if not exe:
         sys.exit("définir LLAMA_COMPLETION")
@@ -150,12 +150,14 @@ def _cli_text(model: str, vec: str | None, n_predict: int, seed: int) -> str:
         "-ngl", "0", "-no-cnv", "--no-display-prompt", "--simple-io", "-t", "4",
     ]  # fmt: skip
     if vec:
-        cmd += ["--control-vector", vec]
-    out = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
+        # Le séparateur `:` de --control-vector-scaled casse sur « C:/ » : nom relatif + cwd.
+        cmd += ["--control-vector-scaled", f"{Path(vec).name}:{scale}"]
+    cwd = Path(vec).parent if vec else None
+    out = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8", cwd=cwd)
     return out.stdout
 
 
-def _py_text(model: str, cv: CVector | None, n_predict: int, seed: int) -> str:
+def _py_text(model: str, cv: CVector | None, n_predict: int, seed: int, scale: float) -> str:
     import ctypes
 
     import llama_cpp
@@ -163,7 +165,7 @@ def _py_text(model: str, cv: CVector | None, n_predict: int, seed: int) -> str:
     llm = llama_cpp.Llama(model, n_ctx=512, seed=seed, n_threads=4, verbose=False)
     if cv is not None:
         n_layer = llama_cpp.llama_model_n_layer(llm.model)
-        buf = cv.flat(n_layer)  # doit rester vivant pendant l'appel
+        buf = cv.flat(n_layer) * np.float32(scale)  # doit rester vivant pendant l'appel
         ptr = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
         rc = llama_cpp.llama_set_adapter_cvec(llm.ctx, ptr, buf.size, cv.n_embd, 1, n_layer)
         if rc != 0:
@@ -172,12 +174,12 @@ def _py_text(model: str, cv: CVector | None, n_predict: int, seed: int) -> str:
     return out["choices"][0]["text"]
 
 
-def equiv(model: str, vec: str, n_predict: int = 40, seed: int = 42) -> bool:
+def equiv(model: str, vec: str, n_predict: int = 40, seed: int = 42, scale: float = 1.0) -> bool:
     cv = read_cvector(vec)
-    cli_with = _cli_text(model, vec, n_predict, seed)
-    cli_without = _cli_text(model, None, n_predict, seed)
-    py_with = _py_text(model, cv, n_predict, seed)
-    py_without = _py_text(model, None, n_predict, seed)
+    cli_with = _cli_text(model, vec, n_predict, seed, scale)
+    cli_without = _cli_text(model, None, n_predict, seed, scale)
+    py_with = _py_text(model, cv, n_predict, seed, scale)
+    py_without = _py_text(model, None, n_predict, seed, scale)
     for label, text in [
         ("cli +vec", cli_with),
         ("py  +vec", py_with),
@@ -201,13 +203,14 @@ def main() -> None:
     e = sub.add_parser("equiv")
     e.add_argument("model")
     e.add_argument("vector")
+    e.add_argument("--scale", type=float, default=1.0)
     a = ap.parse_args()
     if a.cmd == "show":
         show(a.path)
     elif a.cmd == "generate":
         generate(a.model, a.out)
     else:
-        sys.exit(0 if equiv(a.model, a.vector) else 1)
+        sys.exit(0 if equiv(a.model, a.vector, scale=a.scale) else 1)
 
 
 if __name__ == "__main__":
