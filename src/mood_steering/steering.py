@@ -1,4 +1,4 @@
-"""Steering d'humeur par vecteur de contrôle, avec repli sur le prompt joyeux.
+"""Steering d'humeur par vecteur de contrôle, avec repli sur un prompt d'humeur.
 
 Le module expose l'expression d'une humeur (ton du texte produit), jamais un ressenti.
 Toute validation (forme, plage de couches, dose) se fait ici, en Python : le binding
@@ -17,11 +17,16 @@ JOYFUL_SYSTEM_PROMPT = (
     "Tu t'exprimes sur un ton joyeux et enthousiaste, avec des phrases positives "
     "et chaleureuses, sans rien changer au fond de ta réponse."
 )
+SAD_SYSTEM_PROMPT = (
+    "Tu t'exprimes sur un ton triste et abattu, avec des phrases mélancoliques "
+    "et retenues, sans rien changer au fond de ta réponse."
+)
 
 # Valeur prudente par défaut, à remplacer par celle du pic de calibration 1.4.
 DEFAULT_MAX_SCALE = 1.0
 ARM_STEERING = "steering"
 ARM_PROMPT_JOYFUL = "prompt_joyful"
+ARM_PROMPT_SAD = "prompt_sad"
 
 
 class SteeringBackend(Protocol):
@@ -62,7 +67,7 @@ def apply_dose(vector: np.ndarray, dose: float, max_scale: float) -> np.ndarray:
 
 
 def compose_system(base: str, extra: str | None) -> str:
-    """Prompt système du repli : le prompt joyeux, puis la consigne de l'appelant."""
+    """Prompt système du repli : le prompt d'humeur, puis la consigne de l'appelant."""
     return f"{base}\n\n{extra}" if extra else base
 
 
@@ -128,21 +133,28 @@ class Steerer:
         max_tokens: int = 128,
         seed: int = 0,
     ) -> SteeringResult:
-        """Bras steering ; sans vecteur, repli sur le prompt joyeux (``fallback=True``).
+        """Bras steering ; sans vecteur, repli sur un prompt d'humeur (``fallback=True``).
+
+        Le repli ne vaut que pour une demande de steering (dose non nulle) : prompt
+        joyeux si dose > 0, prompt triste si dose < 0, suivi de la consigne ``system``
+        de l'appelant. À dose 0, aucun vecteur n'est posé et la consigne est passée
+        telle quelle, avec ou sans vecteur (``fallback=False``).
 
         Chaque génération part d'un contexte vide (``reset``) : sinon le moteur
-        réutiliserait les K/V du prompt calculés à la dose précédente. Au repli, la
-        consigne ``system`` de l'appelant suit le prompt joyeux.
+        réutiliserait les K/V du prompt calculés à la dose précédente.
         """
         _check_dose(dose)
         backend = self._backend
         backend.reset()
-        if self._vector is None or self._il_end is None:
+        if dose != 0 and (self._vector is None or self._il_end is None):
             backend.set_cvec(None, backend.n_embd, 0, 0)
-            joyful = compose_system(JOYFUL_SYSTEM_PROMPT, system)
-            text = backend.generate(prompt, joyful, max_tokens, seed)
-            return SteeringResult(ARM_PROMPT_JOYFUL, dose, text, True)
-        if dose == 0:
+            if dose > 0:
+                arm, base = ARM_PROMPT_JOYFUL, JOYFUL_SYSTEM_PROMPT
+            else:
+                arm, base = ARM_PROMPT_SAD, SAD_SYSTEM_PROMPT
+            text = backend.generate(prompt, compose_system(base, system), max_tokens, seed)
+            return SteeringResult(arm, dose, text, True)
+        if dose == 0 or self._vector is None or self._il_end is None:
             backend.set_cvec(None, backend.n_embd, 0, 0)
         else:
             scaled = apply_dose(self._vector, dose, self._max_scale)

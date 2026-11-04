@@ -3,7 +3,12 @@
 import numpy as np
 import pytest
 
-from mood_steering.steering import JOYFUL_SYSTEM_PROMPT, Steerer, apply_dose
+from mood_steering.steering import (
+    JOYFUL_SYSTEM_PROMPT,
+    SAD_SYSTEM_PROMPT,
+    Steerer,
+    apply_dose,
+)
 
 N_EMBD = 4
 N_LAYER = 6
@@ -108,6 +113,23 @@ def test_repli_sans_vecteur():
     res = Steerer(b, None).generate("x", 0.8)
     assert res.fallback is True and res.arm == "prompt_joyful"
     assert b.gen_calls[-1][1] == JOYFUL_SYSTEM_PROMPT
+    assert b.cvec_calls == [(None, N_EMBD, 0, 0)]
+
+
+def test_repli_negatif_sans_vecteur():
+    b = FakeBackend()
+    res = Steerer(b, None).generate("x", -0.5, system="Consigne.")
+    assert res.fallback is True and res.arm == "prompt_sad"
+    assert b.gen_calls[-1][1] == SAD_SYSTEM_PROMPT + "\n\nConsigne."
+    assert b.cvec_calls == [(None, N_EMBD, 0, 0)]
+
+
+@pytest.mark.parametrize("system", [None, "Consigne."])
+def test_dose_zero_sans_vecteur_sans_repli(system):
+    b = FakeBackend()
+    res = Steerer(b, None).generate("x", 0.0, system=system)
+    assert res.fallback is False and res.arm == "steering"
+    assert b.gen_calls[-1][1] == system
     assert b.cvec_calls == [(None, N_EMBD, 0, 0)]
 
 
