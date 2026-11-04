@@ -10,6 +10,12 @@ Démonstrateur d'« humeur » de SLM par steering d'activations à l'inférence 
 - Ne jamais figer une version de dépendance de mémoire : `uv add` résout la version réelle.
 - Docs, commits et PR en français ; identifiants de code en anglais.
 
+## Running and verifying
+
+- `uv sync`, puis `uv run pytest -q --tb=short`, `uv run ruff check .` et `uv run ruff format --check .` (squelette uv à créer par la première story).
+- Contrôle rapide avant rapport : `uv run python .claude/cost-kit/controle_rapide.py`.
+- Les tests n'utilisent ni modèle réel ni téléchargement : activations et vecteurs synthétiques.
+
 ## Conventions
 
 - Commits : `Préfixe: description en français` (`Feat:`, `Fix:`, `Docs:`, `Chore:`, `Exp:`).
