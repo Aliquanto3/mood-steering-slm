@@ -13,6 +13,15 @@ KINDS = (KIND_NEUTRAL, KIND_PROMPT, KIND_STEERING)
 DEFAULT_DOSES = (0.25, 0.5, 0.75, 1.0, -0.5)
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9_.]+$")
+_RESERVED = re.compile(r"^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\..*)?$", re.IGNORECASE)
+
+
+def check_safe_name(name: str, what: str = "nom") -> None:
+    """Refuse un nom inutilisable comme nom de fichier ou de dossier (Windows compris)."""
+    if not isinstance(name, str) or not _SAFE_NAME.fullmatch(name) or name.endswith("."):
+        raise ValueError(f"{what} non sûr pour un fichier : {name!r}")
+    if name.startswith(".") or _RESERVED.fullmatch(name):
+        raise ValueError(f"{what} réservé ou caché : {name!r}")
 
 
 @dataclass(frozen=True)
@@ -26,8 +35,7 @@ class Arm:
     def __post_init__(self) -> None:
         if self.kind not in KINDS:
             raise ValueError(f"kind inconnu : {self.kind!r} (attendu {KINDS})")
-        if not _SAFE_NAME.fullmatch(self.name) or self.name.endswith("."):
-            raise ValueError(f"nom de bras non sûr pour un fichier : {self.name!r}")
+        check_safe_name(self.name, "nom de bras")
         if self.kind != KIND_STEERING and self.dose != 0:
             raise ValueError(f"dose non nulle hors steering : {self.dose!r}")
         if self.kind == KIND_STEERING and not -1.0 <= self.dose <= 1.0:

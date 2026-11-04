@@ -8,7 +8,12 @@ from mood_steering.eval.runner import (
     load_run,
     run_bench,
 )
-from mood_steering.steering import JOYFUL_SYSTEM_PROMPT, Steerer
+from mood_steering.steering import (
+    JOYFUL_SYSTEM_PROMPT,
+    SAD_SYSTEM_PROMPT,
+    Steerer,
+    compose_system,
+)
 
 
 class FakeBackend:
@@ -64,6 +69,24 @@ def test_arm_validation():
         Arm("x", "bizarre")
     with pytest.raises(ValueError):
         Arm("x", KIND_STEERING, 1.5)
+    for bad in ("CON", "nul", "com1", "Lpt9.txt", "aux.jsonl", ".cache", "x."):
+        with pytest.raises(ValueError):
+            Arm(bad, "neutral")
+    Arm("console", "neutral")  # préfixe réservé seul : accepté
+
+
+@pytest.mark.parametrize("run_id", ["../x", "a/b", "NUL", "", ".."])
+def test_unsafe_run_id_rejected(tmp_path, monkeypatch, run_id):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError):
+        run_bench(ARMS, ITEMS[:1], _steerer(FakeBackend()), run_id=run_id, model_id="m")
+    assert not (tmp_path / "data").exists()
+
+
+def test_case_collision_rejected(tmp_path):
+    arms = [Arm("Neutral", "neutral"), Arm("neutral", "neutral")]
+    with pytest.raises(ValueError, match="bras"):
+        run_bench(arms, ITEMS, _steerer(FakeBackend()), run_id="r", model_id="m", out_dir=tmp_path)
 
 
 def test_same_items_order_and_seed_for_all_arms(tmp_path):
@@ -134,7 +157,8 @@ def test_neutral_instruction_added_to_every_arm(tmp_path):
     assert run["prompt_joyful"][0]["system"].endswith(NEUTRAL_INSTRUCTION)
 
 
-def test_fallback_without_vector_is_recorded(tmp_path):
+@pytest.mark.parametrize("neutral", [False, True])
+def test_fallback_without_vector_only_for_steering_arms(tmp_path, neutral):
     be = FakeBackend()
     run_bench(
         ARMS,
@@ -143,14 +167,52 @@ def test_fallback_without_vector_is_recorded(tmp_path):
         run_id="r",
         model_id="m",
         out_dir=tmp_path,
-        neutral_instruction=True,
+        neutral_instruction=neutral,
     )
     run = load_run(tmp_path)
-    assert all(rows[0]["fallback"] is True for rows in run.values())
-    joyful_neutral = f"{JOYFUL_SYSTEM_PROMPT}\n\n{NEUTRAL_INSTRUCTION}"
-    # le prompt joyeux n'est jamais doublé
-    assert [c[1] for c in be.calls] == [joyful_neutral] * 4
-    assert all(rows[0]["system"] == joyful_neutral for rows in run.values())
+    extra = NEUTRAL_INSTRUCTION if neutral else None
+    expected = [
+        extra,  # neutre : ni vecteur ni prompt d'humeur
+        compose_system(JOYFUL_SYSTEM_PROMPT, extra),
+        compose_system(JOYFUL_SYSTEM_PROMPT, extra),  # dose > 0 : repli joyeux
+        compose_system(SAD_SYSTEM_PROMPT, extra),  # dose < 0 : repli triste
+    ]
+    assert [c[1] for c in be.calls] == expected
+    assert all(c[3] is None for c in be.calls)
+    assert {n: rows[0]["fallback"] for n, rows in run.items()} == {
+        "neutral": False,
+        "prompt_joyful": False,
+        "steering_p0.50": True,
+        "steering_m0.50": True,
+    }
+    assert [run[a.name][0]["system"] for a in ARMS] == [e or "" for e in expected]
+
+
+def test_existing_run_not_overwritten(tmp_path):
+    steerer = _steerer(FakeBackend())
+    run_bench(ARMS, ITEMS, steerer, run_id="r", model_id="m", out_dir=tmp_path)
+    (tmp_path / "old_arm.jsonl").write_text('{"x": 1}\n', encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        run_bench(ARMS[:1], ITEMS[:1], steerer, run_id="r", model_id="m", out_dir=tmp_path)
+    run_bench(
+        ARMS[:1], ITEMS[:1], steerer, run_id="r", model_id="m", out_dir=tmp_path, overwrite=True
+    )
+    run = load_run(tmp_path)
+    assert set(run) == {"neutral"} and len(run["neutral"]) == 1
+
+
+def test_interrupted_arm_leaves_no_jsonl(tmp_path):
+    class Boom(FakeBackend):
+        def generate(self, prompt, system, max_tokens, seed):
+            if prompt == "pb":
+                raise RuntimeError("panne")
+            return super().generate(prompt, system, max_tokens, seed)
+
+    with pytest.raises(RuntimeError):
+        run_bench(ARMS[:1], ITEMS, _steerer(Boom()), run_id="r", model_id="m", out_dir=tmp_path)
+    assert not (tmp_path / "neutral.jsonl").exists()
+    assert (tmp_path / "neutral.jsonl.part").exists()
+    assert load_run(tmp_path) == {}
 
 
 def test_default_out_dir(tmp_path, monkeypatch):
