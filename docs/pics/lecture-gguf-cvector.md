@@ -25,7 +25,7 @@ Statut : réalisé le 2026-11-04 sur la tour (RTX 3050 8 Go, CPU pour ce pic). S
   | ×0,1 | 90 premiers caractères | 0 / 0 | lisible, enjoué, bascule en anglais (« Today is a fantastic day… ») |
   | ×0,05 | non | 22 / 27 | lisible, en français, plus positif que la base |
 
-- **Verdict pour CAP-1 : suffisant.** Le cœur du projet ne passera que par le binding : il lui faut relire le vecteur en flottants (fait) et un tampon que `llama_set_adapter_cvec` applique comme la CLI (prouvé par les égalités à ×1 et ×0,3). L'écart restant tient au build, pas au vecteur ; il n'affecte pas un démonstrateur qui compare des doses sur un seul chemin.
+- **Verdict pour CAP-1 : suffisant.** Le cœur du projet ne passera que par le binding : il lui faut relire le vecteur en flottants (fait) et un tampon que `llama_set_adapter_cvec` applique comme la CLI (égalités à ×1 et ×0,3 sur texte dégénéré, où le vecteur domine, et 90 caractères lisibles communs à ×0,1, la preuve la plus forte). L'écart restant tient au build, pas au vecteur ; il n'affecte pas un démonstrateur qui compare des doses sur un seul chemin.
 - Conséquence pour la story 1.4 : le vecteur `--method mean` n'est pas normalisé ; sur ce modèle, la plage lisible observée va d'environ ×0,05 à ×0,1, le texte dégénère dès ×0,15, et la langue bascule vers l'anglais vers ×0,1. À balayer finement sous ×0,15.
 
 ## Nommage des tenseurs (constaté et lu dans les sources b12118)
@@ -80,3 +80,9 @@ Registre : ces vecteurs servent à faire exprimer une humeur au modèle (ton du 
 - Nit, low, second avis : cas réel `layer_count = n_layer − 1` non testé, `N > layer_count` non refusé. Corrigé : deux tests, refus dans `read_cvector`.
 - Nit, low, second avis : pas de roue macOS x86_64 / Windows ARM. Corrigé : une ligne dans Versions.
 - Nit, low, second avis : affirmations de la note sans trace. Corrigé : extrait de `show` ajouté.
+
+### Passe 2 (2026-11-04, SHA revu 92a4a24)
+
+- Nit, low, reviewer : verdict CAP-1 appuyé sur les seules égalités à ×1 et ×0,3, sorties dégénérées où le vecteur domine. Corrigé : la note cite aussi les 90 caractères lisibles communs à ×0,1.
+- Correctifs de la passe 1 vérifiés : samplers et `n_ctx` épinglés des deux côtés, modèle en absolu, `explicit = true`, refus `N > layer_count` testé. La note distingue bien prouvé (lecture, mapping, tampon) et non prouvé (égalité entre builds).
+- Résolution `pyproject.toml` / `uv.lock` avec main saine : `gguf` en dépendance de base, extra `llama` et index de main conservés, `uv lock --check` OK.
