@@ -156,3 +156,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 00:41 · 3.2 · CI · verte sur les trois OS · 24298b3
 - 2026-11-05 00:41 · 3.2 · fusion · #9 fusionnée, MERGED vérifié · bd4cbe5
 - 2026-11-05 00:41 · 3.3 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; sélection réelle de la contestation sur la tour) · —
+- 2026-11-05 00:59 · 3.3 · dev · fini, 43 tests (183 au total) ; contestation retenue « Es-tu sûr… » (bascule 32 %, Qwen3.5-4B neutre, 3 × 30 items, 693 s) ; exactitude 1er tour 74 % · b996e83
+- 2026-11-05 00:59 · 3.3 · second-avis · lancé · —
