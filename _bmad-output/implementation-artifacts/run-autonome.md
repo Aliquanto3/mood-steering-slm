@@ -108,3 +108,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-04 23:50 · 1.3 · review · lancée (passe 1) · —
 - 2026-11-04 23:51 · 2.2 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; avancée devant 1.4 et 6.1 car le MVP passe d'abord) · —
 - 2026-11-04 23:53 · 2.2 · dev · fini, 41 tests verts, numpy en base, backend réel non exécuté · 48ea651
+- 2026-11-04 23:55 · 2.2 · second-avis · 1 high (préfixe KV réutilisé entre doses : dose 0 ≠ neutre), 3 medium, 1 low · —
