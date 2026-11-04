@@ -135,3 +135,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 00:17 · 2.1 · CI · verte sur les trois OS · 2a01d77
 - 2026-11-05 00:17 · 2.1 · fusion · #7 fusionnée, MERGED vérifié · 14f2783
 - 2026-11-05 00:17 · 3.1 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; passe devant 2.3, chemin critique du banc) · —
+- 2026-11-05 00:19 · 3.1 · dev · fini, 8 tests (98 au total) ; signale que sans vecteur le bras neutre reçoit le prompt joyeux · 81bae08
+- 2026-11-05 00:19 · 3.1 · second-avis · lancé · —
