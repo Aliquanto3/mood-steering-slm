@@ -100,3 +100,9 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-04 23:43 · — · décision · llama-cvector-generator compilé sur CPU (zig, b12118, sans manifeste) · —
 - 2026-11-04 23:48 · 1.3 · dev · fini, lecture OK (direction.1..23, F32), équivalence ×1 au caractère mais sortie dégénérée, 10 tests verts · 91bb011
 - 2026-11-04 23:49 · 1.2 · review · passe 1 : 2 medium et 5 low corrigés, GO à norme 0,6, retirer suffit · 5afb5b5
+- 2026-11-04 23:50 · 1.2 · PR · #4 ouverte · 5afb5b5
+- 2026-11-04 23:50 · 1.2 · review · passe 2 : 1 medium de doc corrigé (deux sources de rémanence), vérifié par l'orchestrateur, pas de passe 3 · c65eeb9
+- 2026-11-04 23:50 · 1.2 · CI · verte sur les trois OS · c65eeb9
+- 2026-11-04 23:50 · 1.2 · fusion · #4 fusionnée, MERGED vérifié · 9054c94
+- 2026-11-04 23:50 · 1.3 · second-avis · 3 medium (équivalence surévaluée, chemin modèle relatif, conflit lock avec 1.2), 3 low · —
+- 2026-11-04 23:50 · 1.3 · review · lancée (passe 1) · —
