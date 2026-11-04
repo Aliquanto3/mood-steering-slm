@@ -8,10 +8,10 @@ ligne 0 = couche 1, couches absentes à zéro : la forme attendue par `Steerer(i
 
 from __future__ import annotations
 
+import gc
 import json
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable, Sequence
@@ -92,20 +92,34 @@ def default_pairs_path() -> Path:
 
 
 def _read_pairs(path: Path) -> tuple[list[str], list[str]]:
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"fichier de paires introuvable : {path}") from exc
     pos: list[str] = []
     neg: list[str] = []
-    for n, line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), 1):
+    # Découpe sur "\n" seulement : str.splitlines couperait aussi sur U+2028, U+0085, etc.
+    for n, line in enumerate(text.split("\n"), 1):
         if not line.strip():
             continue
         try:
             row = json.loads(line)
-            pos.append(row["positive"])
-            neg.append(row["negative"])
+            p, q = row["positive"], row["negative"]
         except (json.JSONDecodeError, KeyError, TypeError) as exc:
             raise ValueError(f"{path}:{n} : paire invalide ({exc})") from exc
+        for label, value in (("positive", p), ("negative", q)):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{path}:{n} : {label} doit être un texte non vide")
+        pos.append(p)
+        neg.append(q)
     if not pos:
         raise ValueError(f"aucune paire dans {path}")
     return pos, neg
+
+
+def _escape(text: str) -> str:
+    """Une invite par ligne : le générateur lit ligne à ligne puis traite les échappements."""
+    return text.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r")
 
 
 def _run(cmd: Sequence[str]) -> None:
@@ -130,6 +144,10 @@ def calibrate(
     ``generator`` reçoit la ligne de commande complète (liste de chaînes) ; par défaut
     `subprocess.run(check=True)`. Le binaire vient de ``generator_exe`` ou de la variable
     d'environnement ``MOOD_CVECTOR_GENERATOR``.
+
+    La clé du cache n'est que ``model_id`` / ``axis`` : changer ``method`` ou les paires
+    demande ``force=True``. La sortie est relue par `load_vector` avant d'être installée ;
+    en cas d'échec, l'ancien cache reste en place.
     """
     target = vector_path(model_id, axis, root)
     if target.exists() and not force:
@@ -142,16 +160,34 @@ def calibrate(
     target.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
-        pos_file, neg_file, out = tmp_dir / "pos.txt", tmp_dir / "neg.txt", tmp_dir / "out.gguf"
-        pos_file.write_text("\n".join(pos) + "\n", encoding="utf-8")
-        neg_file.write_text("\n".join(neg) + "\n", encoding="utf-8")
-        cmd = [
-            str(exe or "llama-cvector-generator"), "-m", str(model_path),
-            "--positive-file", str(pos_file), "--negative-file", str(neg_file),
-            "-o", str(out), "-ngl", "0", "--method", method,
-        ]  # fmt: skip
-        run(cmd)
-        if not out.exists():
-            raise RuntimeError(f"le générateur n'a pas produit {out.name}")
-        shutil.move(str(out), target)
+        pos_file, neg_file = tmp_dir / "pos.txt", tmp_dir / "neg.txt"
+        pos_file.write_text("".join(_escape(t) + "\n" for t in pos), "utf-8", newline="\n")
+        neg_file.write_text("".join(_escape(t) + "\n" for t in neg), "utf-8", newline="\n")
+        # Sortie dans le dossier cible : os.replace y reste atomique (même volume).
+        fd, out_name = tempfile.mkstemp(prefix=f".{axis}.", suffix=".tmp", dir=target.parent)
+        os.close(fd)
+        out = Path(out_name)
+        out.unlink()
+        try:
+            cmd = [
+                str(exe or "llama-cvector-generator"), "-m", str(model_path),
+                "--positive-file", str(pos_file), "--negative-file", str(neg_file),
+                "-o", str(out), "-ngl", "0", "--method", method,
+            ]  # fmt: skip
+            run(cmd)
+            if not out.exists():
+                raise RuntimeError(f"le générateur n'a pas produit {out.name}")
+            error = None
+            try:
+                load_vector(out)
+            except Exception as exc:  # toute sortie illisible est refusée
+                # Sans chaînage : la trace garderait le memmap du lecteur ouvert, et Windows
+                # refuserait alors de supprimer le fichier temporaire.
+                error = f"{type(exc).__name__}: {exc}"
+            if error is not None:
+                gc.collect()
+                raise RuntimeError(f"sortie du générateur illisible : {error}")
+            os.replace(out, target)
+        finally:
+            out.unlink(missing_ok=True)
     return target

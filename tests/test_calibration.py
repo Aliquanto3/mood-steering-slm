@@ -190,3 +190,57 @@ def test_calibrate_invalid_pairs(tmp_path):
     bad.write_text('{"positive": "x"}\n', encoding="utf-8")
     with pytest.raises(ValueError, match=r"bad\.jsonl:1"):
         cal.calibrate("m", "q", pairs_path=bad, generator=lambda c: None, root=tmp_path)
+
+
+def _pair_files(tmp_path, jsonl):
+    src = tmp_path / "p.jsonl"
+    src.write_bytes(jsonl.encode("utf-8"))
+    seen = {}
+
+    def gen(cmd):
+        for key in ("pos", "neg"):
+            flag = "--positive-file" if key == "pos" else "--negative-file"
+            seen[key] = Path(cmd[cmd.index(flag) + 1]).read_bytes().decode("utf-8")
+        _fake_generator([])(cmd)
+
+    cal.calibrate("m", "q", pairs_path=src, generator=gen, root=tmp_path / "moods")
+    return seen
+
+
+def test_calibrate_escapes_line_breaks_one_prompt_per_line(tmp_path):
+    # Le générateur lit une invite par ligne puis traite les échappements (\n, \\).
+    seen = _pair_files(
+        tmp_path,
+        '{"positive": "Super\\njournée", "negative": "a\\\\b\\r"}\n'
+        '{"positive": "Quel\\u2028bonheur", "negative": "Quel chagrin"}\n',
+    )
+    assert seen["pos"] == "Super\\njournée\nQuel bonheur\n"
+    assert seen["neg"] == "a\\\\b\\r\nQuel chagrin\n"
+    assert seen["pos"].count("\n") == seen["neg"].count("\n") == 2
+
+
+@pytest.mark.parametrize("value", ['""', '"   "', "3", "null"])
+def test_calibrate_rejects_empty_or_non_text_pair(tmp_path, value):
+    src = tmp_path / "p.jsonl"
+    src.write_text(f'{{"positive": "ok", "negative": {value}}}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match=r"p\.jsonl:1 : negative"):
+        cal.calibrate("m", "q", pairs_path=src, generator=lambda c: None, root=tmp_path)
+
+
+def test_calibrate_corrupt_output_keeps_previous_cache(tmp_path, pairs):
+    path = cal.calibrate("m", "q", pairs_path=pairs, generator=_fake_generator([]), root=tmp_path)
+    before = path.read_bytes()
+
+    def corrupt(cmd):
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"pas un gguf")
+
+    with pytest.raises(RuntimeError, match="illisible"):
+        cal.calibrate("m", "q", pairs_path=pairs, generator=corrupt, force=True, root=tmp_path)
+    assert path.read_bytes() == before
+    assert sorted(p.name for p in path.parent.iterdir()) == ["joy_sadness.gguf"]
+
+
+def test_calibrate_missing_pairs_file_is_named(tmp_path):
+    missing = tmp_path / "absent.jsonl"
+    with pytest.raises(FileNotFoundError, match="paires introuvable.*absent"):
+        cal.calibrate("m", "q", pairs_path=missing, generator=lambda c: None, root=tmp_path)
