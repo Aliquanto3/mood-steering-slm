@@ -1,0 +1,34 @@
+[project]
+name = "mood-steering"
+version = "0.0.0"
+description = "Démonstrateur d'expression d'humeur d'un SLM par steering d'activations, comparé à un prompt de jeu de rôle."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mood_steering"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# Outillage tiers vendu dans le dépôt (skills BMAD, kit de coûts) : hors du périmètre du lint.
+extend-exclude = [".claude", "_bmad", "_bmad-output"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+]
