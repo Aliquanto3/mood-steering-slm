@@ -143,3 +143,7 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 00:24 · 3.1 · review · passe 1 : 2 high, 2 medium, 2 low corrigés ; SAD_SYSTEM_PROMPT et ARM_PROMPT_SAD ajoutés à steering.py · 6b3a68a
 - 2026-11-05 00:24 · 3.1 · PR · #8 ouverte · 6b3a68a
 - 2026-11-05 00:24 · 3.1 · review · passe 2 lancée · —
+- 2026-11-05 00:25 · 3.1 · review · passe 2 : aucun Important, 3 low notés (overwrite large, .part conservé, run partiel) · 6b3a68a
+- 2026-11-05 00:25 · 3.1 · CI · verte sur les trois OS · 6b3a68a
+- 2026-11-05 00:25 · 3.1 · fusion · #8 fusionnée, MERGED vérifié · 1078f3b
+- 2026-11-05 00:25 · 3.2 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD) · —
