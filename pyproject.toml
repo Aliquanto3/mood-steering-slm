@@ -16,7 +16,9 @@ llama = [
 ]
 eval = [
     "anthropic>=2.5.0",
+    "huggingface-hub>=0.36.2",
     "protobuf>=7.36.2",
+    "pyarrow>=26.0.1",
     "python-dotenv>=1.2.4",
     "sentencepiece>=0.2.2",
     "torch>=2.15.0",
