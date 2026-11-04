@@ -126,3 +126,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 00:04 · 2.1 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD) · —
 - 2026-11-05 00:06 · 2.1 · dev · fini, 22 tests ajoutés (83 au total), appel réel du générateur non exécuté · f346d39
 - 2026-11-05 00:06 · 2.1 · second-avis · lancé · —
+- 2026-11-05 00:08 · 2.1 · second-avis · 3 medium (paires absentes avant 1.4, retours à la ligne, cache corrompu), 4 low · —
+- 2026-11-05 00:08 · 2.1 · review · passe 1 lancée · —
