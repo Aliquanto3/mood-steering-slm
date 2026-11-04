@@ -43,13 +43,13 @@ development_status:
   epic-1-retrospective: optional
 
   epic-2: in-progress
-  2-1-module-calibration-et-cache-des-vecteurs: in-progress
+  2-1-module-calibration-et-cache-des-vecteurs: done
   2-2-module-steering-dose-et-repli-sur-le-prompt: done
   2-3-module-schedule-dose-par-token: backlog
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-bras-et-runner-du-banc: backlog
+  epic-3: in-progress
+  3-1-bras-et-runner-du-banc: in-progress
   3-2-mesure-du-ton-classifieur-et-juge-en-aveugle: backlog
   3-3-exactitude-et-complaisance: backlog
   3-4-rapport-et-verdict-h1-h3-h4: backlog

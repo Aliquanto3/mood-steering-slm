@@ -131,3 +131,7 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 00:14 · 2.1 · review · passe 1 : 2 medium et 4 low corrigés, 1 low écarté ; appel réel du générateur validé (~26 s) · 2a01d77
 - 2026-11-05 00:14 · 2.1 · PR · #7 ouverte · 2a01d77
 - 2026-11-05 00:14 · 2.1 · review · passe 2 lancée · —
+- 2026-11-05 00:17 · 2.1 · review · passe 2 : 0 constat, échappement conforme au générateur, tests rouges sans correctifs · 2a01d77
+- 2026-11-05 00:17 · 2.1 · CI · verte sur les trois OS · 2a01d77
+- 2026-11-05 00:17 · 2.1 · fusion · #7 fusionnée, MERGED vérifié · 14f2783
+- 2026-11-05 00:17 · 3.1 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; passe devant 2.3, chemin critique du banc) · —
