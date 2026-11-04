@@ -140,3 +140,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 00:20 · 3.1 · second-avis · 2 high (bras neutre joyeux sans vecteur), 2 medium (écrasement, écriture non atomique), 2 low · —
 - 2026-11-05 00:20 · 3.1 · décision · contrat du repli : seulement à dose ≠ 0 ; dose 0 jamais modifiée ; dose < 0 sans vecteur → SAD_SYSTEM_PROMPT · —
 - 2026-11-05 00:20 · 3.1 · review · passe 1 lancée · —
+- 2026-11-05 00:24 · 3.1 · review · passe 1 : 2 high, 2 medium, 2 low corrigés ; SAD_SYSTEM_PROMPT et ARM_PROMPT_SAD ajoutés à steering.py · 6b3a68a
+- 2026-11-05 00:24 · 3.1 · PR · #8 ouverte · 6b3a68a
+- 2026-11-05 00:24 · 3.1 · review · passe 2 lancée · —
