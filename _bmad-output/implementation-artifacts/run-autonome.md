@@ -119,3 +119,8 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 00:01 · 2.2 · décision · main fusionné dans la branche (push forcé refusé), conflit du lock résolu, 61 tests verts · 31f2f77
 - 2026-11-05 00:01 · 2.2 · review · passe 2 lancée · —
 - 2026-11-05 00:01 · 1.4 · dev · lancé (dev-story Opus, pivot, worktree) · —
+- 2026-11-05 00:04 · 2.2 · review · passe 2 : 0 constat, tests rouges sans les correctifs, reset() suffisant · 31f2f77
+- 2026-11-05 00:04 · 2.2 · PR · #6 ouverte · 31f2f77
+- 2026-11-05 00:04 · 2.2 · CI · verte sur les trois OS · 31f2f77
+- 2026-11-05 00:04 · 2.2 · fusion · #6 fusionnée, MERGED vérifié · 964f998
+- 2026-11-05 00:04 · 2.1 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD) · —
