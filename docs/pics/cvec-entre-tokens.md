@@ -46,7 +46,7 @@ Mesuré :
 
 Supposé, non mesuré : le mécanisme exact par lequel les K/V « sous vecteur » réduisent la recopie (une hypothèse : les clés décalées attirent moins l'attention des nouvelles positions propres).
 
-Conséquence pour 2.3 (calendrier de dose) : **retirer le vecteur suffit** à arrêter son effet direct ; réévaluer le contexte sans vecteur n'efface pas la rémanence et, ici, la renforce. La seule rémanence qui reste vient du texte déjà produit, et seul un retour à un contexte sans ce texte (`reset` sur le prompt seul) la supprime. Le calendrier peut donc changer la dose par appel `llama_set_adapter_cvec` sans réévaluation.
+Conséquence pour 2.3 (calendrier de dose) : **retirer le vecteur suffit** à arrêter son effet direct ; réévaluer le contexte sans vecteur n'efface pas la rémanence et, sur ce prompt et ce vecteur aléatoire, la renforce (constat qualitatif sur les textes imprimés, `replay` vs `full` n'est pas chiffré). La rémanence après retrait a deux sources mesurées : le texte déjà produit et les K/V calculés sous vecteur (`off` ≠ `replay`) ; seul un retour à un contexte sans ce texte (`reset` sur le prompt seul) supprime les deux. Le calendrier peut donc changer la dose par appel `llama_set_adapter_cvec` sans réévaluation.
 
 ## Signature du binding
 
