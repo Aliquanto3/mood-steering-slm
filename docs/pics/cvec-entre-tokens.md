@@ -1,28 +1,52 @@
 # Pic 1.2 : vecteur de contrôle réappliqué entre deux tokens
 
-Verdict : **GO pour CAP-3** (variation de la dose en cours de génération, cache KV conservé).
+Verdict : **GO pour CAP-3** (variation de la dose en cours de génération, cache KV conservé), établi à une dose non dégénérée (norme 0,6 par couche) et confirmé de 0,7 à 8.
 
 ## Protocole
 
 `spikes/cvec_between_tokens.py` ; génération gloutonne token par token (`llm.sample(top_k=1, temp=0)`, `llm.eval([tok])`), CPU, prompt `The weather this morning was`, 60 tokens, N = 20.
-Modèle : Qwen3.5-0.8B Q4_K_M (`unsloth/Qwen3.5-0.8B-GGUF`, dans `models/`, non versionné). Vecteur synthétique : direction gaussienne normalisée par couche, norme 8, couches 1 à 23, graine 0. Quatre suites : `base` (rien), `full` (vecteur dès le début), `late` (vecteur posé avant le token 20), `off` (vecteur dès le début, retiré avant le token 20). Contrôle : `base` relancée est identique (déterminisme : oui).
+Modèle : Qwen3.5-0.8B Q4_K_M (`unsloth/Qwen3.5-0.8B-GGUF`, dans `models/`, non versionné). Vecteur synthétique : direction gaussienne normalisée par couche, couches 1 à 23, graine 0, norme balayée (0,5 ; 0,6 ; 0,7 ; 0,8 ; 0,9 ; 1 ; 2 ; 4 ; 8).
+
+Le prompt est toujours évalué **sans** vecteur. Cinq suites par dose :
+
+- `base` : aucun vecteur ;
+- `full` : vecteur posé avant le premier token généré (il agit donc à partir du token 1) ;
+- `late` : vecteur posé avant le token N ;
+- `off` : comme `full`, vecteur retiré avant le token N (dose 0), cache KV conservé ;
+- `replay` : contrôle de `off` ; `reset`, puis les N premiers tokens de `off` réévalués **sans** vecteur (préfixe imposé), suite gloutonne sans vecteur. Même texte que `off`, mais K/V propres.
+
+Contrôle de déterminisme : `base` est relancée et le script s'arrête en erreur si elle diffère (elle n'a pas différé).
 
 ## Résultats (indices dans la suite générée, 0 = premier token)
 
-| Comparaison | Premier token différent |
-|---|---|
-| `late` vs `base` | 21 |
-| `full` vs `base` | 1 |
-| `off` vs `full` | 21 |
-| `off` vs `base` | 1 |
+| Norme | `full` vs `base` | `late` vs `base` | `off` vs `full` | `off` vs `replay` | Sortie de `full` |
+|---|---|---|---|---|---|
+| 0,5 | — | — | — | — | identique à `base` |
+| 0,6 | 8 | 26 | 26 | 26 | cohérente (« is very cold » au lieu de « was very cold ») |
+| 0,7 | 1 | 26 | 24 | 24 | cohérente (« very good. The weather is good. ») |
+| 0,8 à 1 | 1 à 4 | 22 à 24 | — | — | « very good. » puis `.
+` répété |
+| 2 à 8 | 1 | 21 à 22 | 21 | 21 | dégénérée (`anyany…`, `AAAA…`, `Trail…`) |
 
-- Avant N, `late` est identique à `base` : le vecteur ne fuit pas en amont. La divergence apparaît au token N+1 et non N : le token N est échantillonné à partir des logits de l'évaluation précédente ; le vecteur n'agit que sur la prochaine évaluation (`llama_decode`). À retenir pour le calendrier de dose : une dose changée « avant le token N » agit sur le token N+1.
-- Le cache KV est conservé (aucun `reset` ni ré-évaluation du prompt) et le vecteur agit quand même : il s'applique aux nouveaux tokens à l'évaluation, pas au cache.
-- `late` : `very cold.\nThe weather this morning was very cold.\nThe weather this morning was very cold.` puis `TrailTrailTrail…`. La suite bascule d'un coup en sortie dégénérée (la norme 8 est volontairement excessive pour juger la divergence ; la calibration relève de 1.4).
+« — » : suites identiques sur les 60 tokens.
+
+- Avant N, `late` est identique à `base` à toutes les doses : le vecteur ne fuit pas en amont. La divergence apparaît au plus tôt au token N+1 : le token N est échantillonné à partir des logits de l'évaluation précédente ; le vecteur n'agit que sur la prochaine évaluation (`llama_decode`). À retenir pour le calendrier de dose : une dose changée « avant le token N » agit sur le token N+1. À faible dose, la divergence vient plus tard (token 26 à 0,6 et 0,7) : le choix glouton ne bascule qu'au premier token où la marge entre candidats est faible.
+- Le cache KV est conservé (aucun `reset` ni réévaluation) et le vecteur agit quand même : il s'applique aux nouveaux tokens à l'évaluation.
+- Dose : sous 0,6, aucun effet visible avec ce vecteur aléatoire ; dès 0,8, la sortie se dégrade. La fenêtre utile d'un vecteur aléatoire est donc étroite ; celle d'un vecteur de contraste réel relève de 1.4.
 
 ## Retrait en cours de génération (dose 0)
 
-L'effet **cesse en grande partie mais ne s'efface pas** : `off` diffère de `full` dès le token 21 (les `inking…Trail…` s'arrêtent) et la suite redevient cohérente, mais elle reste différente de `base` (`... was good.` au lieu de `... was very cold.`, et le début `very inking…Trail` reste dans le contexte). Deux causes cumulées : le texte déjà généré sous vecteur reste dans le contexte, et les K/V des positions évaluées sous vecteur gardent la trace du vecteur. Pour revenir à une suite strictement neutre, il faut repartir d'un contexte propre (réévaluer le texte sans vecteur ou `reset`). Conséquence pour CAP-3 : une courbe de dose par token est faisable, mais l'effet d'une dose forte a une rémanence.
+Mesuré :
+
+- Le retrait est effectif : à 0,6, 0,7 et de 2 à 8, `off` quitte `full` juste après N (tokens 21 à 26). À 0,6, `off` reprend même la tournure de `base` (« was very cold ») après trois lignes en « is ».
+- `off` ne redevient pas identique à `base` : le texte généré sous vecteur reste dans le contexte.
+- Le contrôle `replay` (même texte, K/V réévalués sans vecteur) **diffère de `off`** dès que `off` quitte `full`, à toutes ces doses. Les K/V calculés sous vecteur pèsent donc sur la suite ; mais c'est `replay` qui garde le plus la trace : à 0,6 il reste sur « is », à 2-8 il continue la sortie dégénérée par recopie du contexte, alors que `off` revient à une suite cohérente.
+- De 0,8 à 1, `off`, `full` et `replay` sont identiques : la répétition `.
+` installée avant N s'entretient d'elle-même, avec ou sans vecteur.
+
+Supposé, non mesuré : le mécanisme exact par lequel les K/V « sous vecteur » réduisent la recopie (une hypothèse : les clés décalées attirent moins l'attention des nouvelles positions propres).
+
+Conséquence pour 2.3 (calendrier de dose) : **retirer le vecteur suffit** à arrêter son effet direct ; réévaluer le contexte sans vecteur n'efface pas la rémanence et, ici, la renforce. La seule rémanence qui reste vient du texte déjà produit, et seul un retour à un contexte sans ce texte (`reset` sur le prompt seul) la supprime. Le calendrier peut donc changer la dose par appel `llama_set_adapter_cvec` sans réévaluation.
 
 ## Signature du binding
 
@@ -47,7 +71,7 @@ llama_cpp.llama_set_adapter_cvec(
 
 ## Incertitudes et suites
 
-- Vecteur synthétique : l'effet d'un vecteur de contraste réel (1.3, 1.4) n'est pas testé ; la rémanence doit être remesurée à dose utile (plus faible).
+- Vecteur synthétique aléatoire : l'effet d'un vecteur de contraste réel (1.3, 1.4) n'est pas testé ; la rémanence et le contrôle `replay` sont à remesurer à sa dose utile. Un seul prompt et une seule graine.
 - Seul le CPU est testé (roue sans CUDA) ; le chemin GPU n'est pas vérifié ici.
 - Un seul modèle (Qwen3.5-0.8B, architecture hybride) ; un modèle 3-4B n'est pas testé.
-- Install : `uv sync --extra llama` (index `llama-cpu` déclaré dans `pyproject.toml`) ; CPython 3.13 avait une roue disponible. La CI n'installe pas l'extra.
+- Install : `uv sync --extra llama` (index `llama-cpu` déclaré dans `pyproject.toml`) ; CPython 3.13 avait une roue disponible. L'index est `explicit` : seul `llama-cpp-python` y est cherché. Le verrou ne contient pas de roue macOS x86_64 (Intel) : l'extra n'y est pas installable sans compilation. La CI n'installe pas l'extra.

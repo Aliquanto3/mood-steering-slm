@@ -54,6 +54,7 @@ def test_summarize_reports_each_pair():
         "full": [1, 9, 9, 9],
         "late": [1, 2, 3, 7],
         "off": [1, 9, 3, 4],
+        "replay": [1, 9, 3, 5],
     }
     assert spike.summarize(runs, 3) == {
         "late_vs_base": 3,
@@ -61,6 +62,7 @@ def test_summarize_reports_each_pair():
         "off_vs_full": 2,
         "off_vs_base": 1,
         "late_vs_full": 1,
+        "off_vs_replay": 3,
         "n_switch": 3,
     }
 
@@ -92,3 +94,70 @@ def test_set_cvec_none_clears_with_null():
 def test_set_cvec_raises_on_error_code():
     with pytest.raises(RuntimeError, match="-1"):
         spike._set_cvec(_FakeLib(rc=-1), "ctx", None, 2, 1, 2)
+
+
+class _FakeLlm:
+    """Faux Llama : journalise reset, eval et sample dans le même journal que le binding."""
+
+    def __init__(self, log):
+        self.log = log
+        self._ctx = type("C", (), {"ctx": "ctx"})()
+        self.next_tok = 100
+
+    def reset(self):
+        self.log.append("reset")
+
+    def tokenize(self, data, add_bos):
+        return [1, 2]
+
+    def eval(self, toks):
+        self.log.append(("eval", list(toks)))
+
+    def sample(self, top_k, temp):
+        self.next_tok += 1
+        self.log.append(("sample", self.next_tok))
+        return self.next_tok
+
+
+class _LoggingLib(_FakeLib):
+    def __init__(self, log):
+        super().__init__()
+        self.log = log
+
+    def llama_set_adapter_cvec(self, ctx, data, length, n_embd, il_start, il_end):
+        self.log.append(("cvec", None if data is None else list(data)))
+        return 0
+
+
+def test_generate_sets_vector_before_sampling_and_clears_at_end():
+    log = []
+    vec = [0.5, 0.5]
+    out = spike.generate(_FakeLlm(log), _LoggingLib(log), "p", 3, {1: vec, 2: None}, 2, 1, 1)
+    assert out == [101, 102, 103]
+    assert log == [
+        "reset",
+        ("cvec", None),  # prompt évalué sans vecteur
+        ("eval", [1, 2]),
+        ("sample", 101),
+        ("eval", [101]),
+        ("cvec", vec),  # posé avant le token 1 : agit sur l'évaluation de 101, donc sur 102
+        ("sample", 102),
+        ("eval", [102]),
+        ("cvec", None),
+        ("sample", 103),
+        ("eval", [103]),
+        ("cvec", None),  # retrait final : pas de fuite vers l'exécution suivante
+    ]
+
+
+def test_generate_forced_prefix_skips_sampling():
+    log = []
+    out = spike.generate(_FakeLlm(log), _LoggingLib(log), "p", 3, {}, 2, 1, 1, forced=[7, 8])
+    assert out == [7, 8, 101]
+    assert [e for e in log if e[0] == "sample"] == [("sample", 101)]
+    assert ("eval", [7]) in log and ("eval", [8]) in log
+
+
+def test_summarize_reports_replay_control():
+    runs = {"base": [1], "full": [2], "late": [1], "off": [2, 3], "replay": [2, 4]}
+    assert spike.summarize(runs, 1)["off_vs_replay"] == 1

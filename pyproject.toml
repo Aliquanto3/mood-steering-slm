@@ -28,6 +28,7 @@ extend-exclude = [".claude", "_bmad", "_bmad-output"]
 [[tool.uv.index]]
 name = "llama-cpu"
 url = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+explicit = true
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]

@@ -3,12 +3,17 @@
 Génération gloutonne token par token avec llama-cpp-python (extra optionnel `llama`).
 Quatre exécutions, même prompt, même graine :
 
-- base : aucun vecteur ;
-- full : vecteur appliqué dès le début ;
-- late : vecteur appliqué après N tokens générés, cache KV conservé ;
-- off  : vecteur dès le début, retiré après N tokens (dose 0), cache KV conservé.
+Le prompt est toujours évalué sans vecteur. Par dose :
 
-Usage : uv run python spikes/cvec_between_tokens.py models/x.gguf --n-switch 20 --scale 8
+- base   : aucun vecteur ;
+- full   : vecteur posé avant le premier token généré ;
+- late   : vecteur posé avant le token N, cache KV conservé ;
+- off    : comme full, vecteur retiré avant le token N (dose 0), cache KV conservé ;
+- replay : contrôle de off ; reset, puis les N premiers tokens de off réévalués sans vecteur
+           (préfixe forcé) et suite gloutonne sans vecteur. off == replay : seul le texte
+           généré porte la rémanence ; off != replay : les K/V évalués sous vecteur y contribuent.
+
+Usage : uv run python spikes/cvec_between_tokens.py models/x.gguf --n-switch 20 --scales 1 2 4 8
 """
 
 from __future__ import annotations
@@ -58,6 +63,7 @@ def summarize(runs: dict[str, list[int]], n_switch: int) -> dict[str, int | None
         "off_vs_full": first_divergence(runs["off"], runs["full"]),
         "off_vs_base": first_divergence(runs["off"], runs["base"]),
         "late_vs_full": first_divergence(runs["late"], runs["full"]),
+        "off_vs_replay": first_divergence(runs["off"], runs["replay"]),
         "n_switch": n_switch,
     }
 
@@ -81,8 +87,13 @@ def generate(
     n_embd: int,
     il_start: int,
     il_end: int,
+    forced: Sequence[int] = (),
 ) -> list[int]:
-    """Génère `n_tokens` tokens gloutons ; `schedule[i]` est appliqué avant le token d'indice i."""
+    """Génère `n_tokens` tokens gloutons ; `schedule[i]` est appliqué avant le token d'indice i.
+
+    Les `forced[i]` remplacent l'échantillonnage pour les premiers tokens (préfixe imposé,
+    évalué comme un token généré).
+    """
     llm.reset()
     ctx = llm._ctx.ctx
     _set_cvec(llama_cpp, ctx, None, n_embd, il_start, il_end)
@@ -91,7 +102,7 @@ def generate(
     for i in range(n_tokens):
         if i in schedule:
             _set_cvec(llama_cpp, ctx, schedule[i], n_embd, il_start, il_end)
-        tok = llm.sample(top_k=1, temp=0.0)
+        tok = forced[i] if i < len(forced) else llm.sample(top_k=1, temp=0.0)
         out.append(tok)
         llm.eval([tok])
     _set_cvec(llama_cpp, ctx, None, n_embd, il_start, il_end)
@@ -104,7 +115,7 @@ def main() -> None:
     p.add_argument("--prompt", default="The weather this morning was")
     p.add_argument("--n-tokens", type=int, default=60)
     p.add_argument("--n-switch", type=int, default=20)
-    p.add_argument("--scale", type=float, default=8.0)
+    p.add_argument("--scales", type=float, nargs="+", default=[1.0, 2.0, 4.0, 8.0])
     p.add_argument("--il-start", type=int, default=CVEC_FIRST_LAYER)
     p.add_argument("--il-end", type=int, default=None, help="inclus ; défaut : dernière couche")
     p.add_argument("--seed", type=int, default=0)
@@ -120,29 +131,33 @@ def main() -> None:
     n_layer = llama_cpp.llama_model_n_layer(llm._model.model)
     il_end = args.il_end if args.il_end is not None else n_layer - 1
     n_target = il_end - args.il_start + 1
-    vec = make_synthetic_vector(n_embd, n_target, args.seed, args.scale)
     print(
         f"llama-cpp-python {llama_cpp.__version__} n_embd={n_embd} n_layer={n_layer} "
-        f"couches {args.il_start}..{il_end} tampon={len(vec)} floats scale={args.scale}"
+        f"couches {args.il_start}..{il_end} tampon={n_embd * n_target} floats"
     )
 
-    def run(sched):
+    def run(sched, forced=()):
         return generate(
-            llm, llama_cpp, args.prompt, args.n_tokens, sched, n_embd, args.il_start, il_end
+            llm, llama_cpp, args.prompt, args.n_tokens, sched, n_embd, args.il_start, il_end, forced
         )
 
-    n = args.n_switch
-    runs = {
-        "base": run({}),
-        "full": run({0: vec}),
-        "late": run({n: vec}),
-        "off": run({0: vec, n: None}),
-    }
-    runs["base2"] = run({})  # contrôle de déterminisme
-    for name, toks in runs.items():
+    def show(name, toks):
         print(f"--- {name}\n{llm.detokenize(toks).decode(errors='replace')!r}")
-    print("determinisme base == base2 :", runs["base"] == runs["base2"])
-    print(summarize(runs, n))
+
+    n = args.n_switch
+    base = run({})
+    if run({}) != base:
+        raise SystemExit("non déterministe : base relancée diffère, comparaisons invalides")
+    show("base", base)
+    for scale in args.scales:
+        vec = make_synthetic_vector(n_embd, n_target, args.seed, scale)
+        runs = {"base": base, "full": run({0: vec}), "late": run({n: vec})}
+        runs["off"] = run({0: vec, n: None})
+        runs["replay"] = run({}, forced=runs["off"][:n])
+        print(f"===== scale={scale}")
+        for name in ("full", "late", "off", "replay"):
+            show(name, runs[name])
+        print(summarize(runs, n))
 
 
 if __name__ == "__main__":
