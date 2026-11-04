@@ -38,8 +38,8 @@ development_status:
   epic-1: in-progress
   1-1-squelette-uv-ruff-pytest-et-ci-trois-os: done
   1-2-pic-vecteur-de-contrôle-réappliqué-entre-deux-tokens: done
-  1-3-pic-relire-le-gguf-de-llama-cvector-generator-en-flottants: in-progress
-  1-4-pic-de-calibration-choisir-les-modèles: backlog
+  1-3-pic-relire-le-gguf-de-llama-cvector-generator-en-flottants: done
+  1-4-pic-de-calibration-choisir-les-modèles: in-progress
   epic-1-retrospective: optional
 
   epic-2: in-progress

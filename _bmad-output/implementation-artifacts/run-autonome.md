@@ -19,6 +19,7 @@ Plafond global : 5 agents actifs à la fois sous Windows (développement, revue 
 - Fichiers d'état du run (ce fichier, `sprint-status.yaml`) : jamais dans une PR de story. PR `chore/etat-run` à part.
 - Suite complète : pas en local pendant un run parallèle, la CI de branche la joue et sert de porte de fusion. Attente : `gh run watch <id> --interval 60`.
 - Fusion par merge commit (`gh pr merge --merge`), jamais de push sur `main`. Journaliser `fusion` seulement après avoir vérifié `MERGED`, puis `git log -1` sur `main`.
+- Mise à jour d'une branche de story sur `main` : `git merge origin/main` puis push simple ; jamais de rebase suivi d'un push forcé (refusé par le classifieur le 2026-11-05).
 - `git worktree prune` avant chaque lancement. Les worktrees ne sont supprimés qu'en fin de run.
 - Heure du journal : toujours prise par `date` au moment d'écrire, jamais devinée. `uv run python` sous Windows.
 - Ressources humaines : `ANTHROPIC_API_KEY` absente au lancement (juge de 3.2 simulé en test ; appel réel en 3.5) ; test sur le portable (4.3), non bloquant. Prévenir Anaël par notification et avancer sur le reste.
@@ -110,3 +111,11 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-04 23:53 · 2.2 · dev · fini, 41 tests verts, numpy en base, backend réel non exécuté · 48ea651
 - 2026-11-04 23:55 · 2.2 · second-avis · 1 high (préfixe KV réutilisé entre doses : dose 0 ≠ neutre), 3 medium, 1 low · —
 - 2026-11-04 23:57 · 1.3 · review · passe 1 : 3 medium et 3 low corrigés, CAP-1 suffisant (binding seul), doses mean utiles ×0,05 à ×0,1 ; rebase sur main par l'orchestrateur, passe 2 lancée · 92a4a24
+- 2026-11-05 00:01 · 1.3 · review · passe 2 : aucun Important, 1 low de doc corrigé · 1f6de41
+- 2026-11-05 00:01 · 1.3 · PR · #5 ouverte · 1f6de41
+- 2026-11-05 00:01 · 1.3 · CI · verte sur les trois OS · 1f6de41
+- 2026-11-05 00:01 · 1.3 · fusion · #5 fusionnée, MERGED vérifié · 15b1293
+- 2026-11-05 00:01 · 2.2 · review · passe 1 : 1 high (reset du contexte KV), 3 medium, 1 low corrigés ; défaut non reproduit sur Qwen3.5 hybride mais réel en attention pure · a2becae
+- 2026-11-05 00:01 · 2.2 · décision · main fusionné dans la branche (push forcé refusé), conflit du lock résolu, 61 tests verts · 31f2f77
+- 2026-11-05 00:01 · 2.2 · review · passe 2 lancée · —
+- 2026-11-05 00:01 · 1.4 · dev · lancé (dev-story Opus, pivot, worktree) · —
