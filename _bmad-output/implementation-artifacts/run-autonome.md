@@ -96,3 +96,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-04 23:32 · 1.3 · dev · lancé (dev-story Sonnet, worktree) · —
 - 2026-11-04 23:38 · 1.2 · dev · fini, GO pour CAP-3 (divergence au token N+1, rémanence après retrait), 17 tests verts · 9f5a4bc
 - 2026-11-04 23:38 · — · décision · clé du juge dans .env (ignoré), variable globale retirée · —
+- 2026-11-04 23:40 · 1.2 · second-avis · 2 medium (rémanence non séparée, GO à une seule dose dégénérée), 5 low · —
