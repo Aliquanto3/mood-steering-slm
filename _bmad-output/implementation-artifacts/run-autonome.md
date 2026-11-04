@@ -149,3 +149,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 00:25 · 3.2 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD) · —
 - 2026-11-05 00:33 · 3.2 · dev · fini, 21 tests (137 au total) ; classifieurs réels essayés sur la tour (joie 0,97 / neutre 0,00 / triste −0,99) ; juge : 200 sorties, ~0,30 $ estimés, aucun appel réel · 6050f12
 - 2026-11-05 00:33 · 3.2 · second-avis · lancé · —
+- 2026-11-05 00:35 · 3.2 · second-avis · 0 high, 1 medium (chemin absolu du .env), 5 low ; IC95 vérifié comme vrai percentile · —
+- 2026-11-05 00:35 · 3.2 · review · passe 1 lancée · —
