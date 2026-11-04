@@ -128,3 +128,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 00:06 · 2.1 · second-avis · lancé · —
 - 2026-11-05 00:08 · 2.1 · second-avis · 3 medium (paires absentes avant 1.4, retours à la ligne, cache corrompu), 4 low · —
 - 2026-11-05 00:08 · 2.1 · review · passe 1 lancée · —
+- 2026-11-05 00:14 · 2.1 · review · passe 1 : 2 medium et 4 low corrigés, 1 low écarté ; appel réel du générateur validé (~26 s) · 2a01d77
+- 2026-11-05 00:14 · 2.1 · PR · #7 ouverte · 2a01d77
+- 2026-11-05 00:14 · 2.1 · review · passe 2 lancée · —
