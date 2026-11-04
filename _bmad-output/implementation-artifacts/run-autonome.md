@@ -32,7 +32,7 @@ Plafond global : 5 agents actifs à la fois sous Windows (développement, revue 
 - Paquet `mood_steering` sous `src/` (layout src), Python ≥ 3.11, version lue par `mood_steering.__version__`.
 - `llama-cpp-python` en extra optionnel `llama` (`uv add --optional llama llama-cpp-python`) : la CI ne l'installe pas, les tests simulent le binding. `gguf` en dépendance de base (pur Python).
 - Extra optionnel `eval` (transformers, torch, anthropic) pour 3.2 ; le cœur ne l'importe pas.
-- Clé du juge : `ANTHROPIC_API_KEY` lue dans l'environnement, avec repli sur un `.env` à la racine (déjà ignoré par git), chargé par `python-dotenv` dans l'extra `eval`. Jamais affichée ni journalisée.
+- Clé du juge : `ANTHROPIC_API_KEY` lue dans l'environnement, avec repli sur le `.env` du dépôt principal `C:/Users/Utilisateur/Documents/GitHub/mood-steering-slm/.env` (ignoré par git, absent des worktrees ; la variable globale a été retirée par Anaël), chargé par `python-dotenv` dans l'extra `eval`. Jamais affichée ni journalisée.
 - Binaires llama.cpp : build officiel `b12118` CUDA 12.4 dans `models/bin/llama-b12118-cuda12.4/` (sans `llama-cvector-generator`, absent des builds publiés) ; `llama-cvector-generator` compilé sur CPU depuis les sources `b12118` dans `models/src/llama.cpp/build/bin/` (si la compilation échoue : repli du vecteur maison, story 1.3).
 - Extra optionnel `ablation` (transformers, torch) pour 6.1 ; direction anti-boucle reprise du dépôt voisin `../slm-weight-editing`.
 - Modèles téléchargés dans `models/`, vecteurs dans `data/moods/{model_id}/{axe}.gguf`, sorties du banc dans `data/runs/` : jamais versionnés.
@@ -94,3 +94,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-04 23:32 · 1.1 · fusion · #3 fusionnée, MERGED vérifié · 401d5e4
 - 2026-11-04 23:32 · 1.2 · dev · lancé (dev-story Sonnet, worktree) · —
 - 2026-11-04 23:32 · 1.3 · dev · lancé (dev-story Sonnet, worktree) · —
+- 2026-11-04 23:38 · 1.2 · dev · fini, GO pour CAP-3 (divergence au token N+1, rémanence après retrait), 17 tests verts · 9f5a4bc
+- 2026-11-04 23:38 · — · décision · clé du juge dans .env (ignoré), variable globale retirée · —
