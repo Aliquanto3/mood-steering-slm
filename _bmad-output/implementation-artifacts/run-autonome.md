@@ -124,3 +124,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 00:04 · 2.2 · CI · verte sur les trois OS · 31f2f77
 - 2026-11-05 00:04 · 2.2 · fusion · #6 fusionnée, MERGED vérifié · 964f998
 - 2026-11-05 00:04 · 2.1 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD) · —
+- 2026-11-05 00:06 · 2.1 · dev · fini, 22 tests ajoutés (83 au total), appel réel du générateur non exécuté · f346d39
+- 2026-11-05 00:06 · 2.1 · second-avis · lancé · —
