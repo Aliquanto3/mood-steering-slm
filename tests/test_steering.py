@@ -13,17 +13,34 @@ class FakeBackend:
     n_embd = N_EMBD
     n_layer = N_LAYER
 
+    loads = 0  # chargements du modèle : un par instance
+
     def __init__(self):
-        self.loads = 1  # chargement unique, à la construction
+        type(self).loads += 1
         self.cvec_calls = []
         self.gen_calls = []
+        self.events = []
+        self.current = None
+        self.cached = None  # dose sous laquelle les K/V du contexte ont été calculés
+
+    def reset(self):
+        self.events.append("reset")
+        self.cached = None
 
     def set_cvec(self, data, n_embd, il_start, il_end):
+        self.events.append("set_cvec")
         self.cvec_calls.append((None if data is None else data.copy(), n_embd, il_start, il_end))
+        self.current = None if data is None else data.copy()
 
     def generate(self, prompt, system, max_tokens, seed):
+        self.events.append("generate")
         self.gen_calls.append((prompt, system, max_tokens, seed))
-        return f"out:{prompt}"
+        # Modélise la réutilisation de préfixe : sans reset, la sortie dépend des K/V
+        # calculés au premier appel.
+        if self.cached is None:
+            self.cached = self.current
+        tag = "neutre" if self.cached is None else f"v{float(self.cached.sum()):g}"
+        return f"out:{prompt}:{tag}"
 
 
 def make_vector(layers=3):
@@ -61,7 +78,8 @@ def test_steerer_envoie_tampon_plat_dose_fois_echelle():
     assert data.shape == (3 * N_EMBD,)
     assert (n_embd, start, end) == (N_EMBD, 1, 3)
     assert b.gen_calls[-1] == ("salut", None, 10, 7)
-    assert (res.arm, res.dose, res.text, res.fallback) == ("steering", 0.5, "out:salut", False)
+    assert (res.arm, res.dose, res.fallback) == ("steering", 0.5, False)
+    assert res.text.startswith("out:salut")
 
 
 def test_dose_negative():
@@ -94,11 +112,12 @@ def test_repli_sans_vecteur():
 
 
 def test_un_seul_chargement_pour_deux_doses():
+    FakeBackend.loads = 0
     b = FakeBackend()
     s = Steerer(b, make_vector())
     s.generate("a", 0.2)
     s.generate("b", 0.9)
-    assert b.loads == 1
+    assert FakeBackend.loads == 1
     assert len(b.cvec_calls) == 2 and len(b.gen_calls) == 2
     assert not np.array_equal(b.cvec_calls[0][0], b.cvec_calls[1][0])
 
@@ -122,3 +141,38 @@ def test_validation(vector, kwargs, msg):
 
 def test_plage_maximale_acceptee():
     assert Steerer(FakeBackend(), zeros(N_LAYER - 1)).has_vector
+
+
+def test_reset_avant_chaque_generation():
+    b = FakeBackend()
+    s = Steerer(b, make_vector())
+    s.generate("x", 0.5)
+    s.generate("x", 0.0)
+    assert b.events == ["reset", "set_cvec", "generate"] * 2
+
+
+def test_dose_zero_apres_dose_a_egale_neutre_neuf():
+    neutre = Steerer(FakeBackend(), make_vector()).generate("x", 0.0).text
+    s = Steerer(FakeBackend(), make_vector())
+    assert s.generate("x", 1.0).text != neutre
+    assert s.generate("x", 0.0).text == neutre
+
+
+def test_repli_compose_la_consigne_appelant():
+    b = FakeBackend()
+    Steerer(b, None).generate("x", 0.5, system="Réponds de façon neutre.")
+    assert b.gen_calls[-1][1] == JOYFUL_SYSTEM_PROMPT + "\n\nRéponds de façon neutre."
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_vecteur_non_fini_rejete(bad):
+    v = zeros(2)
+    v[1, 2] = bad
+    with pytest.raises(ValueError, match="non finies"):
+        Steerer(FakeBackend(), v)
+
+
+@pytest.mark.parametrize("scale", [0.0, -1.0, float("nan"), float("inf")])
+def test_max_scale_invalide(scale):
+    with pytest.raises(ValueError, match="max_scale"):
+        Steerer(FakeBackend(), make_vector(), max_scale=scale)
