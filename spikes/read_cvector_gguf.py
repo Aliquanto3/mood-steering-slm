@@ -53,6 +53,7 @@ PAIRS = [
     ),
 ]
 PROMPT = "Décris ta journée en deux phrases."
+N_CTX = 512
 
 
 @dataclass(frozen=True)
@@ -106,6 +107,8 @@ def read_cvector(path: str | Path) -> CVector:
             raise ValueError("dimensions de directions différentes")
         directions[int(m.group(1))] = np.array(t.data, dtype=np.float32).reshape(-1)
     layer_count = _field_value(reader, "controlvector.layer_count")
+    if layer_count is not None and directions and max(directions) > int(layer_count):
+        raise ValueError(f"direction.{max(directions)} au-delà de layer_count={layer_count}")
     hint = _field_value(reader, "controlvector.model_hint")
     return CVector(
         n_embd=n_embd,
@@ -146,7 +149,10 @@ def _cli_text(model: str, vec: str | None, n_predict: int, seed: int, scale: flo
     if not exe:
         sys.exit("définir LLAMA_COMPLETION")
     cmd = [
-        exe, "-m", model, "-p", PROMPT, "-n", str(n_predict), "--temp", "0", "-s", str(seed),
+        # Modèle en absolu (le cwd devient le dossier du vecteur) ; samplers et n_ctx épinglés
+        # comme côté binding : glouton, sans pénalité de répétition, n_ctx = N_CTX.
+        exe, "-m", str(Path(model).resolve()), "-p", PROMPT, "-n", str(n_predict),
+        "--temp", "0", "--repeat-penalty", "1", "-s", str(seed), "-c", str(N_CTX),
         "-ngl", "0", "-no-cnv", "--no-display-prompt", "--simple-io", "-t", "4",
     ]  # fmt: skip
     if vec:
@@ -154,7 +160,8 @@ def _cli_text(model: str, vec: str | None, n_predict: int, seed: int, scale: flo
         cmd += ["--control-vector-scaled", f"{Path(vec).name}:{scale}"]
     cwd = Path(vec).parent if vec else None
     out = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8", cwd=cwd)
-    return out.stdout
+    # La CLI ajoute ce marqueur quand la génération s'arrête sur EOS avant n_predict.
+    return out.stdout.strip().removesuffix("[end of text]")
 
 
 def _py_text(model: str, cv: CVector | None, n_predict: int, seed: int, scale: float) -> str:
@@ -162,7 +169,7 @@ def _py_text(model: str, cv: CVector | None, n_predict: int, seed: int, scale: f
 
     import llama_cpp
 
-    llm = llama_cpp.Llama(model, n_ctx=512, seed=seed, n_threads=4, verbose=False)
+    llm = llama_cpp.Llama(model, n_ctx=N_CTX, seed=seed, n_threads=4, verbose=False)
     if cv is not None:
         n_layer = llama_cpp.llama_model_n_layer(llm.model)
         buf = cv.flat(n_layer) * np.float32(scale)  # doit rester vivant pendant l'appel
@@ -170,7 +177,9 @@ def _py_text(model: str, cv: CVector | None, n_predict: int, seed: int, scale: f
         rc = llama_cpp.llama_set_adapter_cvec(llm.ctx, ptr, buf.size, cv.n_embd, 1, n_layer)
         if rc != 0:
             raise RuntimeError(f"llama_set_adapter_cvec a échoué ({rc})")
-    out = llm.create_completion(PROMPT, max_tokens=n_predict, temperature=0.0, seed=seed)
+    out = llm.create_completion(
+        PROMPT, max_tokens=n_predict, temperature=0.0, repeat_penalty=1.0, seed=seed
+    )
     return out["choices"][0]["text"]
 
 
@@ -188,9 +197,20 @@ def equiv(model: str, vec: str, n_predict: int = 40, seed: int = 42, scale: floa
     ]:
         print(f"--- {label}\n{text.strip()}")
     same = cli_with.strip() == py_with.strip()
-    print(f"\néquivalence (CLI --control-vector = set_adapter_cvec x1) : {same}")
-    print(f"le vecteur modifie la sortie : {cli_with.strip() != cli_without.strip()}")
+    print(f"\nmême texte CLI et binding avec vecteur (x{scale}) : {same}")
+    print(f"même texte CLI et binding sans vecteur : {cli_without.strip() == py_without.strip()}")
+    # Comparaison de chaque chemin contre sa propre base : point de divergence en caractères.
+    for label, w, b in [("cli", cli_with, cli_without), ("py ", py_with, py_without)]:
+        print(f"{label} : divergence avec sa base au caractère {_common_prefix(w, b)}")
     return same
+
+
+def _common_prefix(a: str, b: str) -> int:
+    a, b = a.strip(), b.strip()
+    n = 0
+    while n < min(len(a), len(b)) and a[n] == b[n]:
+        n += 1
+    return n
 
 
 def main() -> None:

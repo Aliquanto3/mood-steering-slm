@@ -62,6 +62,25 @@ def test_flat_buffer_layout_layer1_first_missing_zero(tmp_path):
     assert not flat[4 * N_EMBD :].any()
 
 
+def test_real_layout_last_layer_absent(tmp_path):
+    # Cas réel du générateur : direction.1..n_layer-1, layer_count = n_layer - 1.
+    rng = np.random.default_rng(1)
+    rows = {il: rng.standard_normal(N_EMBD).astype(np.float32) for il in range(1, N_LAYER)}
+    _write(tmp_path / "v.gguf", {f"direction.{il}": v for il, v in rows.items()}, N_LAYER - 1)
+    cv = rcg.read_cvector(tmp_path / "v.gguf")
+    assert cv.layer_count == N_LAYER - 1
+    assert cv.missing_layers == []
+    flat = cv.flat(N_LAYER)
+    np.testing.assert_array_equal(flat[(N_LAYER - 2) * N_EMBD : (N_LAYER - 1) * N_EMBD], rows[4])
+    assert not flat[(N_LAYER - 1) * N_EMBD :].any()
+
+
+def test_rejects_direction_beyond_layer_count(tmp_path):
+    _write(tmp_path / "v.gguf", {"direction.3": _rows()[1]}, layer_count=2)
+    with pytest.raises(ValueError, match="au-delà de layer_count"):
+        rcg.read_cvector(tmp_path / "v.gguf")
+
+
 def test_flat_rejects_too_few_layers(tmp_path):
     _write(tmp_path / "v.gguf", {"direction.4": _rows()[4]})
     with pytest.raises(ValueError, match="au-delà de 3 couches"):
