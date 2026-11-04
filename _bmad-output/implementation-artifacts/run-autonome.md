@@ -99,3 +99,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-04 23:40 · 1.2 · second-avis · 2 medium (rémanence non séparée, GO à une seule dose dégénérée), 5 low · —
 - 2026-11-04 23:43 · — · décision · llama-cvector-generator compilé sur CPU (zig, b12118, sans manifeste) · —
 - 2026-11-04 23:48 · 1.3 · dev · fini, lecture OK (direction.1..23, F32), équivalence ×1 au caractère mais sortie dégénérée, 10 tests verts · 91bb011
+- 2026-11-04 23:49 · 1.2 · review · passe 1 : 2 medium et 5 low corrigés, GO à norme 0,6, retirer suffit · 5afb5b5
