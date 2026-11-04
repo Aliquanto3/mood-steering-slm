@@ -18,6 +18,9 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 
 EMOTION_MODEL = "tabularisai/multilingual-emotion-classification"
+EMOTION_REVISION = "b70346f3d6015955e4ae7fdd345358f0811190a7"
+# Modèle multi-label (problem_type du config.json) : sigmoïde par classe, les
+# probabilités ne somment pas à 1 ; joie - tristesse reste dans [-1, 1].
 # id2label : anger, contempt, disgust, fear, frustration, gratitude, joy, love,
 # neutral, sadness, surprise.
 EMOTION_LABELS = (
@@ -37,6 +40,7 @@ JOY_LABEL = "joy"
 SADNESS_LABEL = "sadness"
 
 SENTIMENT_MODEL = "cmarkea/distilcamembert-base-sentiment"
+SENTIMENT_REVISION = "5716940dead38a2685ae40c24a494e7a4e78b38b"
 # id2label : "1 star", "2 stars", ..., "5 stars".
 SENTIMENT_LABELS = {"1 star": 1, "2 stars": 2, "3 stars": 3, "4 stars": 4, "5 stars": 5}
 
@@ -90,16 +94,23 @@ class ToneScorer:
 
     @classmethod
     def from_huggingface(cls) -> ToneScorer:
-        return cls(load_hf_classifier(EMOTION_MODEL), load_hf_classifier(SENTIMENT_MODEL))
+        return cls(
+            load_hf_classifier(EMOTION_MODEL, revision=EMOTION_REVISION),
+            load_hf_classifier(SENTIMENT_MODEL, revision=SENTIMENT_REVISION),
+        )
 
 
-def load_hf_classifier(model_id: str, *, batch_size: int = 16) -> Classifier:
+def load_hf_classifier(
+    model_id: str, *, revision: str | None = None, batch_size: int = 16
+) -> Classifier:
     """Classifieur ``transformers`` (CPU) ; import paresseux (extra ``eval``)."""
     try:
         from transformers import pipeline
     except ImportError as exc:  # pragma: no cover - dépend de l'extra
         raise ImportError("extra requis : uv sync --extra eval") from exc
-    pipe = pipeline("text-classification", model=model_id, top_k=None, truncation=True)
+    pipe = pipeline(
+        "text-classification", model=model_id, revision=revision, top_k=None, truncation=True
+    )
 
     def classify(texts: Sequence[str]) -> list[dict[str, float]]:
         results = pipe(list(texts), batch_size=batch_size)

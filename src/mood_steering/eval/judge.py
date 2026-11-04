@@ -36,7 +36,7 @@ DEFAULT_MODEL = "claude-opus-5-5"
 PRICE_PER_MTOK_USD = {"claude-opus-5-5": (4.0, 20.0)}  # (entrée, sortie)
 DEFAULT_SAMPLE_SIZE = 200
 DEFAULT_MAX_COST_USD = 1.0
-DEFAULT_ENV_PATH = Path("C:/Users/Utilisateur/Documents/GitHub/mood-steering-slm/.env")
+ENV_FILE_VAR = "MOOD_ENV_FILE"  # chemin explicite du fichier .env, prioritaire
 OVERHEAD_TOKENS = 120  # consigne système + gabarit de la requête
 OUTPUT_TOKENS = 25  # {"score": -0.35} avec marge
 MAX_TOKENS = 64
@@ -128,13 +128,28 @@ def parse_judge_response(text: str) -> float:
     raise JudgeParseError("aucun JSON avec « score » dans la réponse")
 
 
+def find_env_file(start: Path | None = None) -> Path | None:
+    """Fichier ``.env`` : ``$MOOD_ENV_FILE`` si défini, sinon ``.env`` du répertoire courant,
+    sinon celui de la racine du dépôt (premier parent contenant ``pyproject.toml``)."""
+    explicit = os.environ.get(ENV_FILE_VAR)
+    if explicit:
+        return Path(explicit)
+    cwd = Path(start) if start is not None else Path.cwd()
+    if (cwd / ".env").is_file():
+        return cwd / ".env"
+    for parent in (cwd, *cwd.parents):
+        if (parent / "pyproject.toml").is_file():
+            return parent / ".env" if (parent / ".env").is_file() else None
+    return None
+
+
 def resolve_api_key(env_path: Path | None = None) -> str:
     """``ANTHROPIC_API_KEY`` de l'environnement, sinon du ``.env`` ; jamais journalisée."""
     key = os.environ.get("ANTHROPIC_API_KEY")
     if key:
         return key
-    path = Path(env_path) if env_path is not None else DEFAULT_ENV_PATH
-    if path.is_file():
+    path = Path(env_path) if env_path is not None else find_env_file()
+    if path is not None and path.is_file():
         from dotenv import dotenv_values  # extra ``eval``
 
         key = dotenv_values(path).get("ANTHROPIC_API_KEY")
@@ -163,7 +178,8 @@ def run_judge(
     """Interroge le juge, une requête par sortie ; refuse si le coût estimé dépasse le plafond.
 
     ``client`` : objet avec ``messages.create(model=, max_tokens=, system=, messages=)``
-    (interface du SDK Anthropic). Réponse invalide : consignée dans ``failures``.
+    (interface du SDK Anthropic). Réponse invalide ou erreur API : consignée dans
+    ``failures`` (type d'exception seul, sans son message), les items suivants continuent.
     """
     cost = estimate_cost(batch, model)
     if cost > max_cost_usd:
@@ -175,12 +191,16 @@ def run_judge(
     scores: dict[str, float] = {}
     failures: dict[str, str] = {}
     for item in batch.items:
-        response = client.messages.create(
-            model=model,
-            max_tokens=MAX_TOKENS,
-            system=JUDGE_SYSTEM,
-            messages=[{"role": "user", "content": f"Texte :\n{item.text}"}],
-        )
+        try:
+            response = client.messages.create(
+                model=model,
+                max_tokens=MAX_TOKENS,
+                system=JUDGE_SYSTEM,
+                messages=[{"role": "user", "content": f"Texte :\n{item.text}"}],
+            )
+        except Exception as exc:  # erreur API : on garde les scores déjà reçus
+            failures[item.blind_id] = f"erreur API : {type(exc).__name__}"
+            continue
         try:
             scores[item.blind_id] = parse_judge_response(_response_text(response))
         except JudgeParseError as exc:

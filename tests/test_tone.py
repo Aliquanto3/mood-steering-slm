@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -33,10 +35,17 @@ def fake_sentiment(texts):
 
 
 def test_core_does_not_import_heavy_packages():
-    for mod in (tone, judge):
-        head = open(mod.__file__, encoding="utf-8").read().split("\ndef ")[0]
-        for name in ("transformers", "torch", "anthropic", "dotenv"):
-            assert f"import {name}" not in head and f"from {name}" not in head
+    code = (
+        "import sys\n"
+        "import mood_steering, mood_steering.eval.tone, mood_steering.eval.judge\n"
+        "import mood_steering.eval.stats\n"
+        "heavy = ('torch', 'transformers', 'anthropic', 'dotenv')\n"
+        "print(sorted(m for m in heavy if m in sys.modules))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    ).stdout
+    assert out.strip() == "[]"
 
 
 def test_joy_minus_sadness_scores():
@@ -195,6 +204,54 @@ def test_resolve_api_key(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY")
     with pytest.raises(RuntimeError, match="introuvable"):
         judge.resolve_api_key(tmp_path / "absent.env")
+
+
+def test_find_env_file_order(tmp_path, monkeypatch):
+    monkeypatch.delenv(judge.ENV_FILE_VAR, raising=False)
+    repo = tmp_path / "repo"
+    sub = repo / "a" / "b"
+    sub.mkdir(parents=True)
+    (repo / "pyproject.toml").write_text("", encoding="utf-8")
+    # pas de .env : rien
+    assert judge.find_env_file(sub) is None
+    # .env à la racine du dépôt, trouvé en remontant
+    (repo / ".env").write_text("ANTHROPIC_API_KEY=racine\n", encoding="utf-8")
+    assert judge.find_env_file(sub) == repo / ".env"
+    # .env du répertoire courant prioritaire
+    (sub / ".env").write_text("ANTHROPIC_API_KEY=courant\n", encoding="utf-8")
+    assert judge.find_env_file(sub) == sub / ".env"
+    # variable explicite prioritaire sur tout
+    explicit = tmp_path / "ailleurs.env"
+    monkeypatch.setenv(judge.ENV_FILE_VAR, str(explicit))
+    assert judge.find_env_file(sub) == explicit
+
+
+def test_resolve_api_key_from_env_file(tmp_path, monkeypatch):
+    pytest.importorskip("dotenv")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv(judge.ENV_FILE_VAR, raising=False)
+    (tmp_path / "pyproject.toml").write_text("", encoding="utf-8")
+    (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=depuis-fichier\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert judge.resolve_api_key() == "depuis-fichier"
+
+
+def test_run_judge_api_error_keeps_other_scores():
+    batch = judge.prepare_judge_batch(records(), 3, seed=2)
+
+    class Flaky(FakeClient):
+        def create(self, **kw):
+            self.calls.append(kw)
+            if len(self.calls) == 2:
+                raise ConnectionError("secret sk-ant-xyz")
+            return SimpleNamespace(content=[SimpleNamespace(text='{"score": 0.1}')])
+
+    client = Flaky([])
+    result = judge.run_judge(batch, client)
+    ids = [i.blind_id for i in batch.items]
+    assert len(client.calls) == 3
+    assert result.scores == {ids[0]: 0.1, ids[2]: 0.1}
+    assert result.failures == {ids[1]: "erreur API : ConnectionError"}
 
 
 def test_bootstrap_deterministic_and_contains_mean():

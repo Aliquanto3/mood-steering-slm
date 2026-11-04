@@ -36,9 +36,8 @@ def bootstrap_ci(
     rng = random.Random(seed)
     means = sorted(sum(rng.choices(values, k=n)) / n for _ in range(n_boot))
     alpha = (1.0 - level) / 2.0
-    # La moyenne observée borne l'intervalle : il la contient toujours.
-    low = min(_percentile(means, alpha), mean)
-    high = max(_percentile(means, 1.0 - alpha), mean)
+    low = _percentile(means, alpha)
+    high = _percentile(means, 1.0 - alpha)
     return Interval(mean=mean, low=low, high=high, n=n)
 
 
