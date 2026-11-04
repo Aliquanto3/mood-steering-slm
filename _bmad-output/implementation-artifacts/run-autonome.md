@@ -151,3 +151,8 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 00:33 · 3.2 · second-avis · lancé · —
 - 2026-11-05 00:35 · 3.2 · second-avis · 0 high, 1 medium (chemin absolu du .env), 5 low ; IC95 vérifié comme vrai percentile · —
 - 2026-11-05 00:35 · 3.2 · review · passe 1 lancée · —
+- 2026-11-05 00:41 · 3.2 · review · passe 1 : 1 medium et 5 low corrigés ; correctif vérifié par l'orchestrateur, pas de passe 2 · 24298b3
+- 2026-11-05 00:41 · 3.2 · PR · #9 ouverte · 24298b3
+- 2026-11-05 00:41 · 3.2 · CI · verte sur les trois OS · 24298b3
+- 2026-11-05 00:41 · 3.2 · fusion · #9 fusionnée, MERGED vérifié · bd4cbe5
+- 2026-11-05 00:41 · 3.3 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; sélection réelle de la contestation sur la tour) · —
