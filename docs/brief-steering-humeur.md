@@ -83,6 +83,11 @@ Piste par défaut : **A** pour valider l'effet rapidement, **B** si le curseur c
 - **Critères de succès** mesurables pour chacune des hypothèses de la section 5.
 - **Intégration future** dans frugal-ai-workbench (migration Ollama → llama-server) : oui, non, plus tard ?
 
+### Premières réponses (Anaël, 4 novembre 2026)
+
+- **Objectif prioritaire** : un démonstrateur qui me convainque de la faisabilité et que je puisse montrer à des **clients techniques** qui se posent les mêmes questions.
+- **Objectif secondaire, pas prioritaire** : que le code et les tests de ce dépôt servent à terme à ajouter des features « humeur » à mes autres applications SLM, comme [harness-lab](https://github.com/Aliquanto3/harness-lab) et [frugal-ai-workbench](https://github.com/Aliquanto3/frugal-ai-workbench). On garde donc des briques découplées (calibration, application du vecteur, évaluation) et des tests qui fixent leur contrat, sans en faire un produit dès le MVP.
+
 ## 8. Points de vigilance
 
 - **Comportement ≠ ressenti** : le démonstrateur montre une *expression* d'humeur. Il ne dit rien d'un éventuel état vécu. Le formuler ainsi dans toute communication.
