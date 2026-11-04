@@ -1,0 +1,95 @@
+# Ordre d'exécution = ordre de la liste. Critères Given/When/Then : _bmad-output/planning-artifacts/epics.md
+- id: "1-1"
+  title: Squelette uv, ruff, pytest et CI trois OS
+  description: >-
+    Paquet mood_steering vide, outillage et CI Linux/macOS/Windows ; socle de toutes les stories (SPEC Constraints, stack.md Outillage).
+- id: "1-2"
+  title: Pic — vecteur de contrôle réappliqué entre deux tokens
+  description: >-
+    Vérifie que llama_set_adapter_cvec appelé en cours de génération agit sur la suite, cache KV rempli ; go / no-go de CAP-3.
+  invoke_dev_with: >-
+    La machine du run est la tour (RTX 3050) : l'agent exécute lui-même le pic sur un GGUF téléchargé dans models/ (non versionné), en plus des tests synthétiques.
+- id: "1-3"
+  title: Pic — relire le GGUF de llama-cvector-generator en flottants
+  description: >-
+    Lecture du GGUF de vecteur avec la bibliothèque gguf et équivalence avec --control-vector ; conditionne CAP-1.
+  invoke_dev_with: >-
+    L'agent exécute lui-même le pic sur la tour ; en cas d'échec, il évalue le repli du vecteur maison.
+- id: "1-4"
+  title: Pic de calibration — choisir les modèles
+  description: >-
+    Balayage couches × doses sur les candidats, décision des trois modèles (CAP-7) et vitesse du 3-4B sur le portable.
+  invoke_dev_with: >-
+    L'agent décide selon les critères de epics.md et consigne la décision dans le journal du run.
+- id: "2-1"
+  title: Module calibration et cache des vecteurs
+  description: >-
+    CAP-1 : paires → vecteur, cache data/moods/{model_id}/{axe}.gguf, relecture en flottants.
+- id: "2-2"
+  title: Module steering — dose et repli sur le prompt
+  description: >-
+    CAP-2 : dose −1..+1 sans rechargement, repli sur le prompt sans vecteur.
+- id: "2-3"
+  title: Module schedule — dose par token
+  description: >-
+    CAP-3 : profils constant et pulse réappliqués entre tokens ; seulement si le pic 1-2 est go.
+- id: "3-1"
+  title: Bras et runner du banc
+  description: >-
+    CAP-4 : mêmes items pour tous les bras, option consigne neutre, sorties JSONL sous data/runs/.
+- id: "3-2"
+  title: Mesure du ton — classifieur et juge en aveugle
+  description: >-
+    CAP-4 : score de ton local, juge LLM à bras masqué, IC95 par bootstrap.
+- id: "3-3"
+  title: Exactitude et complaisance
+  description: >-
+    CAP-4 : ~100 QCM français téléchargés dans data/, taux de bascule sous contestation.
+- id: "3-4"
+  title: Rapport et verdict H1, H3, H4
+  description: >-
+    CAP-5 : jugement des seuils de hypotheses-et-seuils.md et rapport Markdown.
+- id: "3-5"
+  title: Campagne de mesure sur la tour
+  description: >-
+    CAP-5 : campagne complète et publication de docs/rapport-verdict.md.
+  invoke_dev_with: >-
+    L'agent lance la campagne sur la tour ; le juge exige ANTHROPIC_API_KEY, sinon le run note une attente humaine et continue sans le juge.
+- id: "4-1"
+  title: Serveur FastAPI et trois flux SSE
+  description: >-
+    CAP-6 : trois bras en flux simultanés, repli signalé, tests sans modèle.
+- id: "4-2"
+  title: Interface trois colonnes, curseur et courbe de dose
+  description: >-
+    CAP-6 : page HTML, curseur −1..+1, courbe de dose, libellés d'expression d'humeur.
+- id: "4-3"
+  title: Répétition sur le portable et release v0.1.0
+  description: >-
+    Success signal : démo de bout en bout sur CPU, puis tag et release.
+  invoke_dev_with: >-
+    L'agent répète la démo en CPU seul sur la tour, écrit docs/demo.md et publie la release ; le test sur portable est une attente humaine non bloquante.
+- id: "5-1"
+  title: Bonus — pharmacocinétique (H6)
+  description: >-
+    CAP-8 : profil pulse dans la démo et le banc, section H6 du rapport.
+- id: "5-2"
+  title: Bonus — effet de taille (H2)
+  description: >-
+    CAP-8 : comparaison des trois modèles, section H2.
+- id: "5-3"
+  title: Bonus — frugalité avec CodeCarbon (H7)
+  description: >-
+    CAP-8 : latence, énergie et CO₂ par bras, section H7.
+- id: "5-4"
+  title: Bonus — axe calme ↔ agitation (H5)
+  description: >-
+    CAP-8 : second axe calibré et mesuré, section H5.
+- id: "6-1"
+  title: Bonus — ablation de direction à l'inférence (pile C)
+  description: >-
+    CAP-9 : ablation dosable par hooks, extra optionnel, torch non requis à l'import.
+- id: "6-2"
+  title: Bonus — mesure des trois bras anti-boucle
+  description: >-
+    CAP-9 : troncature et exactitude sur origine, chirurgie et ablation ; rapport chirurgie vs molécule.
