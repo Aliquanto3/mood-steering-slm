@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge mood-steering-slm</title>
+<style>
+:root{--bg:#faf7f2;--fg:#2a2420;--muted:#6b625a;--card:#fff;--line:#e4ddd3;--seal:#9b2226;--ok:#2d6a4f;--warn:#b5651d}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1a18;--fg:#ece6de;--muted:#a59c92;--card:#262320;--line:#3a3531;--seal:#d0494f;--ok:#74c69d;--warn:#e9a15d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 Georgia,"Times New Roman",serif}
+main{max-width:880px;margin:0 auto;padding:32px 16px 64px}
+header{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+h1{font-size:1.9rem;margin:0 0 4px}
+h2{font-size:1.2rem;margin:32px 0 10px;border-bottom:1px solid var(--line);padding-bottom:4px}
+.sub{color:var(--muted);margin:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:10px 0}
+ul{padding-left:20px;margin:6px 0}
+li{margin:4px 0}
+.lock::marker{content:"🔒 "}
+.kill::marker{content:"✗ "}
+.crack::marker{content:"⚠ "}
+.kill{color:var(--muted)}
+.crack{color:var(--warn)}
+.personas{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.p{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.p b{display:block}
+.p span{color:var(--muted);font-size:.92rem}
+.seal{flex:0 0 auto}
+</style>
+</head>
+<body>
+<main>
+<header>
+<svg class="seal" width="150" height="150" viewBox="0 0 150 150" role="img" aria-label="Sceau HARDENED">
+  <defs><path id="c" d="M75,75 m-52,0 a52,52 0 1,1 104,0 a52,52 0 1,1 -104,0"/></defs>
+  <path d="M75 6 C92 10 100 4 112 16 C124 26 140 32 140 52 C146 70 138 82 142 96 C136 116 124 122 110 136 C92 146 82 140 66 145 C48 144 36 134 24 122 C10 108 12 92 7 76 C6 58 12 44 22 32 C36 14 54 10 75 6Z" fill="var(--seal)"/>
+  <circle cx="75" cy="75" r="58" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>
+  <circle cx="75" cy="75" r="40" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.5"/>
+  <text font-family="Georgia,serif" font-size="11" fill="#fff" letter-spacing="3"><textPath href="#c">MOOD-STEERING-SLM · FORGE · 2026-11-04 ·</textPath></text>
+  <text x="75" y="80" text-anchor="middle" font-family="Georgia,serif" font-size="17" font-weight="bold" fill="#fff" letter-spacing="1.5">HARDENED</text>
+</svg>
+<div>
+  <h1>Idée durcie</h1>
+  <p class="sub">Démonstrateur d'« humeur » de SLM par steering d'activations, comparé au prompt</p>
+  <p class="sub">Session bmad-forge-idea, 4 novembre 2026, avec Anaël · Brief : <code>_bmad-output/planning-artifacts/brief.md</code></p>
+</div>
+</header>
+
+<h2>Issue</h2>
+<div class="card">Les questions ouvertes de la section 7 du brief sont tranchées. La thèse centrale a des seuils fixés avant toute mesure, et un critère de mort (H4) : si le steering ne résiste pas mieux que le prompt, la conclusion sera « le prompt suffit », et c'est un résultat qu'on peut montrer.</div>
+
+<h2>Décisions verrouillées</h2>
+<ul>
+<li class="lock"><b>Thèse</b> : le steering produit une humeur dosable que le prompt ne reproduit pas, pour un coût mesuré (H1, H3, H4). H2, H5, H6 et H7 en bonus.</li>
+<li class="lock"><b>Seuils</b> : au plus 5 points de perte d'exactitude, alerte au-delà de +10 points de complaisance, plage de doses ≥ 1,5×. H4 est le critère de mort.</li>
+<li class="lock"><b>Pile B</b> : llama-cpp-python avec <code>llama_set_adapter_cvec</code>. La pile C (hooks) ne sert qu'au lot anti-boucle.</li>
+<li class="lock"><b>Modèles</b> : un 3-4B, un 1-2B et Qwen3.5-0.8B. Démo en direct sur un portable en CPU ; mesures sur la tour.</li>
+<li class="lock"><b>Humeur</b> : un axe joie ↔ tristesse, avec le pôle négatif montré.</li>
+<li class="lock"><b>Banc maison</b> : ton, exactitude, complaisance et robustesse, sur les mêmes items pour tous les bras.</li>
+<li class="lock"><b>Brique</b> : une bibliothèque <code>mood_steering</code> sans interface, réutilisable dans harness-lab, et une démo FastAPI + SSE en trois colonnes.</li>
+<li class="lock"><b>Lot bonus</b> : la molécule anti-boucle contre la chirurgie du MIT, sur Qwen3.5-0.8B, en trois bras.</li>
+</ul>
+
+<h2>Écarté, et pourquoi</h2>
+<ul>
+<li class="kill">Option A (llama-swap) : ni curseur continu ni pharmacocinétique.</li>
+<li class="kill">Tout en pile C : peu crédible en production, et peu réutilisable.</li>
+<li class="kill">Option D pour l'humeur : le contraste avec la chirurgie passe par le lot anti-boucle.</li>
+<li class="kill">Plusieurs humeurs d'emblée : le coût de calibration se multiplie par le nombre de modèles.</li>
+<li class="kill">Passer par slm-quality-bench au MVP : il ne parle qu'à Ollama.</li>
+</ul>
+
+<h2>Fissures qui restent à vérifier</h2>
+<ul>
+<li class="crack">Le brief d'origine disait harness-lab sur Ollama : c'est faux, il est sur llama-cpp-python. La correction a été prise en compte.</li>
+<li class="crack">Un vecteur de contrôle ajoute un vecteur, il ne retire pas une direction. La molécule anti-boucle demande des hooks.</li>
+<li class="crack">Pic technique : le vecteur réappliqué en cours de génération agit-il, avec le cache KV déjà rempli ?</li>
+<li class="crack">Sous 1B, l'humeur risque de dégrader le texte avant de changer le ton. C'est le pic de calibration qui tranchera.</li>
+<li class="crack">La PR llama.cpp #24740 est toujours ouverte. Sans objet pour la pile B.</li>
+</ul>
+
+<h2>Voix qui ont mis l'idée à l'épreuve</h2>
+<div class="personas">
+<div class="p"><b>🏗️ Winston, architecte</b><span>Sept hypothèses, c'est un programme de recherche. Deux piles, c'est deux jeux de bugs.</span></div>
+<div class="p"><b>📋 John, PM</b><span>Trois démos en une : laquelle montre-t-on si on n'en a qu'une ?</span></div>
+<div class="p"><b>📊 Mary, analyste</b><span>La direction est un axe, donc le pôle opposé est gratuit.</span></div>
+<div class="p"><b>🎨 Sally, UX</b><span>Un portable en salle de réunion, et trois flux simultanés.</span></div>
+<div class="p"><b>🧑‍💼 Claire Fontaine, DSI (générée)</b><span>Qu'est-ce que ça fait que le prompt ne fait pas ? Et une IA qui dit oui à tout ?</span></div>
+<div class="p"><b>🔬 Tomás Reyes, interprétabilité (généré)</b><span>Sous 1B, l'effet casse. Reprendre la direction du MIT ne prouve pas qu'on sait la trouver.</span></div>
+<div class="p"><b>🛠️ Inès Garnier, intégratrice (générée)</b><span>Personne ne déploie de transformers sur CPU.</span></div>
+<div class="p"><b>📐 Hélène Vasseur, statisticienne (générée)</b><span>Écrivez maintenant ce qui vous ferait dire non.</span></div>
+</div>
+</main>
+</body>
+</html>
