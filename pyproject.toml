@@ -5,7 +5,9 @@ description = "Démonstrateur d'expression d'humeur d'un SLM par steering d'acti
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "numpy>=2.4.6",
+]
 
 [project.optional-dependencies]
 llama = [
