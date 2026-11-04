@@ -22,3 +22,4 @@ emissions.csv
 
 .env
 .claude/worktrees/
+.claude/cost-kit/.blocages
