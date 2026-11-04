@@ -42,9 +42,9 @@ development_status:
   1-4-pic-de-calibration-choisir-les-modèles: backlog
   epic-1-retrospective: optional
 
-  epic-2: backlog
+  epic-2: in-progress
   2-1-module-calibration-et-cache-des-vecteurs: backlog
-  2-2-module-steering-dose-et-repli-sur-le-prompt: backlog
+  2-2-module-steering-dose-et-repli-sur-le-prompt: in-progress
   2-3-module-schedule-dose-par-token: backlog
   epic-2-retrospective: optional
 

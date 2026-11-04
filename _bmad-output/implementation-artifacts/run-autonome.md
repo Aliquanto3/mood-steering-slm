@@ -106,3 +106,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-04 23:50 · 1.2 · fusion · #4 fusionnée, MERGED vérifié · 9054c94
 - 2026-11-04 23:50 · 1.3 · second-avis · 3 medium (équivalence surévaluée, chemin modèle relatif, conflit lock avec 1.2), 3 low · —
 - 2026-11-04 23:50 · 1.3 · review · lancée (passe 1) · —
+- 2026-11-04 23:51 · 2.2 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; avancée devant 1.4 et 6.1 car le MVP passe d'abord) · —
