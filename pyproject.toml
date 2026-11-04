@@ -7,6 +7,11 @@ license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+llama = [
+    "llama-cpp-python>=0.3.36",
+]
+
 [build-system]
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
@@ -20,12 +25,20 @@ target-version = "py311"
 # Outillage tiers vendu dans le dépôt (skills BMAD, kit de coûts) : hors du périmètre du lint.
 extend-exclude = [".claude", "_bmad", "_bmad-output"]
 
+[[tool.uv.index]]
+name = "llama-cpu"
+url = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+explicit = true
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[tool.uv.sources]
+llama-cpp-python = { index = "llama-cpu" }
 
 [dependency-groups]
 dev = [
