@@ -89,3 +89,8 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-04 23:30 · — · décision · Anaël ajoute les Epics 5 et 6 au run (bonus, après le MVP ; 6.1 en V2 du sprint 1) · —
 - 2026-11-04 23:30 · 1.1 · second-avis · 0 medium/high, 5 low · —
 - 2026-11-04 23:30 · 1.1 · review · conforme, 3 low corrigés (.blocages, timeout/concurrency CI, hatchling>=1.27) · 77ae95c
+- 2026-11-04 23:32 · 1.1 · PR · #3 ouverte · 77ae95c
+- 2026-11-04 23:32 · 1.1 · CI · verte sur les trois OS · 77ae95c
+- 2026-11-04 23:32 · 1.1 · fusion · #3 fusionnée, MERGED vérifié · 401d5e4
+- 2026-11-04 23:32 · 1.2 · dev · lancé (dev-story Sonnet, worktree) · —
+- 2026-11-04 23:32 · 1.3 · dev · lancé (dev-story Sonnet, worktree) · —
