@@ -382,6 +382,8 @@ version = "0.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "gguf" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 
 [package.optional-dependencies]
@@ -399,6 +401,7 @@ dev = [
 requires-dist = [
     { name = "gguf", specifier = ">=0.19.0" },
     { name = "llama-cpp-python", marker = "extra == 'llama'", specifier = ">=0.3.36", index = "https://abetlen.github.io/llama-cpp-python/whl/cpu" },
+    { name = "numpy", specifier = ">=2.4.6" },
 ]
 provides-extras = ["llama"]
 
