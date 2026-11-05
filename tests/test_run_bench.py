@@ -603,3 +603,24 @@ def test_h7_names_arm_without_energy_reading(tmp_path):
     assert (
         "Bras sans lecture d'énergie (unité commencée sans mesure, puis reprise) : neutral." in text
     )
+
+
+def test_resume_short_campaign_from_manifest_without_short_run_key(tmp_path):
+    spec = rb.MODELS["0.8b"]
+    protocol = rb.Protocol(n_tone=10, n_mcq=6, secondary_phases=("tone",))
+    legacy = rb.build_manifest([spec], protocol, mcq_items(), {spec.key: {}})
+    rb.check_manifest(tmp_path, legacy, resume=False)
+    short = rb.build_manifest([spec], protocol, mcq_items(), {spec.key: {}}, short_run=True)
+    rb.check_manifest(tmp_path, short, resume=True)  # manifeste d'avant la clé : repris
+    other = tmp_path / "other"
+    rb.check_manifest(other, short, resume=False)
+    with pytest.raises(ValueError, match="short_run"):
+        rb.check_manifest(other, legacy, resume=True)
+
+
+def test_short_run_secondary_report_stays_in_out():
+    short = rb.parse_args(["--n-tone", "10", "--short-run", "--models", "0.8b", "--out", "x"])
+    assert rb.secondary_report_path(short) == Path("x") / "secondaires.md"
+    assert rb.secondary_report_path(rb.parse_args([])) == rb.DEFAULT_SECONDARY_REPORT
+    explicit = rb.parse_args(["--secondary-report", "y.md"])
+    assert rb.secondary_report_path(explicit) == Path("y.md")

@@ -325,7 +325,10 @@ def check_manifest(out: Path, manifest: Mapping[str, Any], resume: bool) -> None
         if not resume:
             raise FileExistsError(f"campagne déjà présente dans {out} : relancer avec --resume")
         old = json.loads(path.read_text(encoding="utf-8"))
-        diff = sorted(k for k in set(old) | set(manifest) if old.get(k) != manifest.get(k))
+        # ``short_run`` absent d'un manifeste antérieur à la clé : un protocole réduit y est
+        # déjà visible, la clé seule ne doit pas bloquer la reprise
+        keys = (set(old) | set(manifest)) - ({"short_run"} - set(old))
+        diff = sorted(k for k in keys if old.get(k) != manifest.get(k))
         if diff:
             raise ValueError(f"protocole différent de la campagne en cours ({', '.join(diff)})")
         return
@@ -1225,7 +1228,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help=f"défaut {DEFAULT_REPORT} (cœur), {DEFAULT_FRUGALITY_REPORT} (H7 sans cœur)",
     )
-    p.add_argument("--secondary-report", type=Path, default=DEFAULT_SECONDARY_REPORT)
+    p.add_argument(
+        "--secondary-report",
+        type=Path,
+        default=None,
+        help=f"défaut {DEFAULT_SECONDARY_REPORT}, {{out}}/secondaires.md avec --short-run",
+    )
     args = p.parse_args(argv)
     floors = args.tone_tokens < 64 or args.n_tone < 50 or args.n_mcq < 100
     if floors and not args.short_run:
@@ -1238,6 +1246,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     if args.max_judge_cost is not None and not 0 < args.max_judge_cost <= 1.0:
         p.error("--max-judge-cost doit être dans ]0, 1] $")
     return args
+
+
+def secondary_report_path(args: argparse.Namespace) -> Path:
+    """Mesure courte : rapport secondaire dans ``--out``, jamais sur celui de la campagne 3.5."""
+    if args.secondary_report is not None:
+        return args.secondary_report
+    return args.out / "secondaires.md" if args.short_run else DEFAULT_SECONDARY_REPORT
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1363,7 +1378,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         judge_sample=args.judge_sample or DEFAULT_SAMPLE_SIZE,
         judge_max_cost=args.max_judge_cost or DEFAULT_MAX_COST_USD,
         report=args.report or DEFAULT_REPORT,
-        secondary_report=args.secondary_report,
+        secondary_report=secondary_report_path(args),
         runtime=runtime,
         energy=args.energy,
         frugality_report=args.report or DEFAULT_FRUGALITY_REPORT,
