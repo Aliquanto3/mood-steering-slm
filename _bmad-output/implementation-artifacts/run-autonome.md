@@ -279,3 +279,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:04 · 4.3 · dev · fini : répétition CPU OK (≈5 tok/s par colonne, 1er token 1,3–1,7 s, pôle négatif OK, boucle attendue à −1), docs/demo.md, v0.1.0, notes de release · da2762b
 - 2026-11-05 05:04 · 4.3 · second-avis · lancé (Haiku) · da2762b
 - 2026-11-05 05:04 · 5.3 · dev · branchement --energy dans run_bench lancé (Sonnet, worktree), mesure courte 0.8B CPU · —
+- 2026-11-05 05:06 · 4.3 · second-avis · 0 high, 3 medium (taille du GGUF, CUDA_VISIBLE_DEVICES POSIX, MOOD_CVECTOR_GENERATOR sans commande), 4 low · da2762b
+- 2026-11-05 05:06 · 4.3 · review · lancée (Sonnet, story de doc) · —
