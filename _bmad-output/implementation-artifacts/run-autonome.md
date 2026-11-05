@@ -300,3 +300,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:19 · 5.3 · review · passe 2 lancée (Opus) · —
 - 2026-11-05 05:22 · 5.3 · review · passe 2 : 2 medium corrigés (reprise d'une mesure courte ancienne, rapport secondaire protégé) ; passe 3 sautée, correctif de 20 lignes vérifié par l'orchestrateur · f77dade
 - 2026-11-05 05:22 · 5.3 · PR · ouverte · f77dade
+- 2026-11-05 05:23 · 5.2 · review · passe 1 : 4 medium + 3 low corrigés (finesse = nombre de doses utiles, pentes en échelle réelle, appariement explicite, sensibilité au seuil) · 1140c8c
+- 2026-11-05 05:23 · 5.2 · review · passe 2 lancée (Opus) · —
