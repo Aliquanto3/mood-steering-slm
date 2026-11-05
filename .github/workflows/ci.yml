@@ -45,6 +45,8 @@ jobs:
             tests: tests/test_tone.py
           - extra: ablation
             tests: tests/test_ablation.py tests/test_antiloop.py
+          - extra: frugal
+            tests: tests/test_frugality.py
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

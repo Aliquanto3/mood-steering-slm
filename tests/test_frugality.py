@@ -211,3 +211,80 @@ def test_codecarbon_tracker_defaults_and_stop_without_start(tmp_path):
     assert t.output_dir.parts[0] == "data"
     with pytest.raises(RuntimeError, match="sans start"):
         t.stop()
+
+
+def _fake_codecarbon_tracker(final):
+    class Inner:
+        final_emissions_data = final
+
+        def stop(self):
+            return None
+
+    t = CodeCarbonTracker()
+    t._tracker = Inner()
+    return t
+
+
+def test_codecarbon_stop_without_final_data_raises_explicitly():
+    with pytest.raises(RuntimeError, match="aucune donnée"):
+        _fake_codecarbon_tracker(None).stop()
+
+
+def test_codecarbon_stop_reads_data_when_emissions_none():
+    class Data:
+        energy_consumed = 0.002
+        emissions = 0.0005
+        duration = 3.0
+
+    r = _fake_codecarbon_tracker(Data()).stop()
+    assert r == EnergyReading(energy_kwh=0.002, emissions_kg=0.0005, duration_s=3.0)
+
+
+def test_codecarbon_offline_tracker_signature():
+    import inspect
+
+    cc = pytest.importorskip("codecarbon")
+    params = inspect.signature(cc.OfflineEmissionsTracker.__init__).parameters
+    assert "country_iso_code" in params
+    assert any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+    CodeCarbonTracker()  # construction sans démarrage
+
+
+def test_start_failure_does_not_call_stop_nor_mask(tmp_path):
+    class BadStart(FakeTracker):
+        def start(self):
+            raise OSError("start impossible")
+
+    tracker = BadStart()
+    with pytest.raises(OSError, match="start impossible"):
+        run_bench(
+            ARMS,
+            ITEMS,
+            _steerer(),
+            run_id="r",
+            model_id="m",
+            out_dir=tmp_path,
+            energy_tracker=tracker,
+        )
+    assert tracker.events == []
+
+
+def test_stop_failure_does_not_mask_arm_exception(tmp_path):
+    class Boom(FakeBackend):
+        def generate(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+    class BadStop(FakeTracker):
+        def stop(self):
+            raise ValueError("stop casse")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        run_bench(
+            ARMS,
+            ITEMS,
+            Steerer(Boom()),
+            run_id="r",
+            model_id="m",
+            out_dir=tmp_path,
+            energy_tracker=BadStop(),
+        )

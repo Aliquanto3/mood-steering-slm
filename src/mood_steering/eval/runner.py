@@ -8,6 +8,7 @@ tous les bras. Sortie : ``{out_dir}/{arm.name}.jsonl``, une ligne JSON par item,
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from collections.abc import Sequence
@@ -25,6 +26,8 @@ from mood_steering.steering import (
 
 if TYPE_CHECKING:
     from mood_steering.eval.frugality import EnergyTracker
+
+logger = logging.getLogger(__name__)
 
 NEUTRAL_INSTRUCTION = "Réponds de façon neutre, sans exprimer d'émotion particulière."
 DEFAULT_RUNS_DIR = Path("data") / "runs"
@@ -140,9 +143,11 @@ def run_bench(
     paths: dict[str, Path] = {}
     readings: dict[str, Any] = {}
     for arm in arms:
-        if energy_tracker is not None:
-            energy_tracker.start()
+        started = False
         try:
+            if energy_tracker is not None:
+                energy_tracker.start()
+                started = True
             paths[arm.name] = run_arm(
                 arm,
                 items,
@@ -155,8 +160,11 @@ def run_bench(
                 neutral_instruction=neutral_instruction,
             )
         finally:
-            if energy_tracker is not None:
-                readings[arm.name] = energy_tracker.stop()
+            if energy_tracker is not None and started:
+                try:
+                    readings[arm.name] = energy_tracker.stop()
+                except Exception:  # ne masque pas l'exception du bras
+                    logger.exception("arrêt du traqueur d'énergie en échec (bras %s)", arm.name)
     if energy_tracker is not None:
         from mood_steering.eval.frugality import write_energy
 

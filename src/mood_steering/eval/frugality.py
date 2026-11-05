@@ -3,6 +3,17 @@
 Le traqueur est injectable (protocole ``EnergyTracker``) ; l'implémentation réelle
 ``CodeCarbonTracker`` importe ``codecarbon`` à la demande (extra ``frugal``).
 Les lectures par bras sont écrites dans ``energy.json`` du run, à côté des JSONL.
+
+Branchement prévu dans ``scripts/run_bench.py`` (option ``--energy``) ::
+
+    from mood_steering.eval.frugality import (
+        CodeCarbonTracker, frugality_section, frugality_summary)
+
+    tracker = CodeCarbonTracker() if args.energy else None
+    paths = run_bench(arms, items, steerer, run_id=..., model_id=..., energy_tracker=tracker)
+    ...
+    if args.energy:
+        extra_sections["H7"] = frugality_section(frugality_summary(run_dir))
 """
 
 from __future__ import annotations
@@ -67,13 +78,14 @@ class CodeCarbonTracker:
             from codecarbon import OfflineEmissionsTracker
         except ImportError as exc:  # pragma: no cover - extra absent
             raise RuntimeError("codecarbon absent : uv sync --extra frugal") from exc
-        if self.save_to_file:
-            self.output_dir.mkdir(parents=True, exist_ok=True)
+        # CodeCarbon exige que le dossier existe, même sans écriture de fichier.
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         self._tracker = OfflineEmissionsTracker(
             country_iso_code=self.country_iso_code,
             output_dir=str(self.output_dir),
             save_to_file=self.save_to_file,
             log_level="error",
+            allow_multiple_runs=True,  # un verrou périmé ne doit pas faire échouer le run
         )
         self._tracker.start()
 
@@ -82,7 +94,11 @@ class CodeCarbonTracker:
             raise RuntimeError("stop() sans start()")
         tracker, self._tracker = self._tracker, None
         emissions = tracker.stop()
-        data = tracker.final_emissions_data
+        data = getattr(tracker, "final_emissions_data", None)
+        if data is None:
+            raise RuntimeError(
+                "CodeCarbon n'a fourni aucune donnée d'émissions (autre instance active ?)"
+            )
         return EnergyReading(
             energy_kwh=float(data.energy_consumed),
             emissions_kg=float(emissions if emissions is not None else data.emissions),
@@ -218,7 +234,7 @@ def frugality_section(summary: FrugalitySummary) -> str:
     lines = [
         "Latence par génération (moyenne, IC95 bootstrap), énergie et CO2 par bras.",
         "",
-        "| Bras | n | Latence (s) | Latence/token (s) | Énergie (kWh) | CO2 (kg) "
+        "| Bras | n | Latence (s) | Latence/mot (approx. tokens) (s) | Énergie (kWh) | CO2 (kg) "
         "| Énergie/gén. (kWh) | CO2/gén. (kg) |",
         "|---|---|---|---|---|---|---|---|",
     ]
