@@ -174,3 +174,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:19 · 3.4 · second-avis · 0 high, 3 medium (faux positifs sous-estimés, « oui, mais » contraire à H4, bootstrap non apparié), 4 low · —
 - 2026-11-05 01:19 · 3.4 · décision · verdict : H4 non ⇒ « non » ; « oui, mais » = H1 tenue + H4 oui + alerte H3 ou H3 non détectable ; bootstrap apparié par item · —
 - 2026-11-05 01:19 · 3.4 · review · passe 1 lancée · —
+- 2026-11-05 01:26 · 1.4 · dev · fini (85 min) : Qwen3.5-4B (cœur, couches 8–24, max_scale 0,7), Qwen3.5-2B (6–18, 0,4), Qwen3.5-0.8B (6–18, 0,1), Q4_K_M, Apache-2.0 ; vecteur mean (déjà normalisé à 1) ; 4B CPU ≈ 4,9 tok/s par flux à 4 threads ; 100 paires · 10a5d3c
+- 2026-11-05 01:26 · 1.4 · second-avis · lancé · —
