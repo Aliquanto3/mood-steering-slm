@@ -1,6 +1,6 @@
-# Rapport anti-boucle : chirurgie des poids ou ablation dosable
+﻿# Rapport anti-boucle : chirurgie des poids ou ablation dosable
 
-Statut : squelette. Les chiffres viendront de la mesure complète (story bonus 6.2, SPEC CAP-9) ; le tableau ci-dessous est vide à dessein.
+Statut : mesure complète faite le 2026-11-05 (story bonus 6.2, SPEC CAP-9), run `antiloop-full`. Résultat : le plafond de 512 tokens sature tous les bras, la mesure ne discrimine pas (voir Lecture et limites).
 
 ## Question
 
@@ -51,15 +51,31 @@ Sorties : `data/runs/antiloop/<id>/<bras>.jsonl` (une ligne par item, reprise en
 
 ## Résultats
 
-À remplir par la mesure complète.
+Run `antiloop-full` : `n=100` items Global-MMLU-Lite (fr), `max_new_tokens=512`, `enable_thinking=True`, génération gloutonne, bf16, torch 2.6.0+cu124 et transformers 5.22.1, GPU RTX 3050 8 Go, environ 3,3 items par minute et par bras (3 h pour les quatre bras). Tokens de fin retenus : 248044 et 248046 pour les deux modèles. Aucun écart au protocole du squelette. Bornes : IC95 par bootstrap percentile.
 
 | Bras | n | Tronquées (IC95) | Exactitude (IC95) | Non extraites | Tokens moyens |
 |---|---|---|---|---|---|
-| origin | | | | | |
-| surgery | | | | | |
-| ablation@0.5 | | | | | |
-| ablation@1 | | | | | |
+| origin | 100 | 0,97 [0,93 ; 1,00] | 0,02 [0,00 ; 0,05] | 36 | 507,7 |
+| surgery | 100 | 0,97 [0,93 ; 1,00] | 0,03 [0,00 ; 0,07] | 39 | 508,6 |
+| ablation@0.5 | 100 | 0,96 [0,92 ; 0,99] | 0,03 [0,00 ; 0,07] | 42 | 507,1 |
+| ablation@1 | 100 | 0,97 [0,93 ; 1,00] | 0,02 [0,00 ; 0,05] | 50 | 508,3 |
+
+Données brutes : `data/runs/antiloop/antiloop-full/` (ignoré par git, une ligne par item par bras, plus `summary.json`).
 
 ## Lecture et limites
 
-À écrire après la mesure : chirurgie (permanente) contre ablation (dosable, réversible, réglable par la dose). Le démonstrateur montre l'expression d'un comportement, jamais un ressenti. Limites attendues : un modèle de 0,8 milliard de paramètres, 100 items, un plafond de tokens unique, une direction issue de la chirurgie elle-même.
+Constat principal : avec un plafond de 512 tokens et le raisonnement ouvert, 96 à 97 % des générations atteignent le plafond dans chaque bras, avec une longueur moyenne d'environ 508 tokens. Les quatre bras sont indiscernables : les IC95 se recouvrent largement, et l'exactitude (2 à 3 %) est proche de zéro parce qu'une réponse tronquée compte fausse. Cette mesure ne permet donc de conclure ni que la chirurgie réduit les boucles, ni que l'ablation à l'inférence (doses 0,5 et 1,0) a un effet comparable : à ce plafond, le critère sature avant de pouvoir distinguer une boucle d'un raisonnement simplement long. La mesure ne contredit pas non plus l'effet rapporté par le MIT, elle n'a pas la résolution pour le voir.
+
+Ce que le résultat montre, malgré tout : à ce plafond, ni l'édition des poids ni l'ablation d'une direction n'ont d'effet visible sur le taux de réponses tronquées de Qwen3.5-0.8B sur ces items. Le comportement observé est celui d'un raisonnement qui ne se termine pas dans le budget, pour tous les bras.
+
+Chirurgie (permanente) contre ablation (dosable, réversible) : l'avantage structurel de l'ablation (dose réglable, aucun poids modifié) reste à démontrer, faute d'effet mesurable ici. Le démonstrateur montre l'expression d'un comportement, jamais un ressenti.
+
+Limites :
+
+- plafond unique de 512 tokens, trop bas pour ce jeu en mode raisonnement ; c'est la cause du plafonnement des mesures ;
+- 100 items, un seul tirage, génération gloutonne ;
+- modèle de 0,8 milliard de paramètres, direction issue de la chirurgie elle-même ;
+- bf16 sur transformers avec le repli PyTorch des noyaux de Qwen3.5 (pas de `causal_conv1d` ni `flash-linear-attention`), sans effet attendu sur les résultats mais plus lent ;
+- le contrôle croisé avec `slm-quality-bench` (piste `think_on`, Ollama, Q8_0) n'a pas été fait ici.
+
+Suite proposée (hors périmètre de cette mesure) : relancer avec un plafond plus haut (par exemple 2048 ou 4096 tokens) sur un n réduit, `--arms` permettant de cibler les bras, pour que la fraction de réponses terminées permette de comparer les bras ; ou utiliser un jeu d'items qui provoque des boucles.
