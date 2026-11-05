@@ -173,12 +173,18 @@ def unit_path(out: Path, model_id: str, phase: str, arm: str) -> Path:
 
 
 def _read_part(part: Path) -> list[dict[str, Any]]:
-    """Lignes complètes d'un ``.part`` ; une dernière ligne tronquée (arrêt brutal) est perdue."""
+    """Lignes complètes d'un ``.part`` ; une dernière ligne tronquée (arrêt brutal) est perdue.
+
+    Lecture en octets, coupée sur ``\n`` seul : une sortie peut contenir U+2028 ou U+0085, et
+    un arrêt au milieu d'un caractère UTF-8 multi-octets ne doit pas bloquer la reprise.
+    """
     rows = []
-    for line in part.read_text(encoding="utf-8").splitlines():
+    for line in part.read_bytes().split(b"\n"):
+        if not line:
+            continue
         try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError:
+            rows.append(json.loads(line.decode("utf-8")))
+        except (UnicodeDecodeError, json.JSONDecodeError):
             break
     return rows
 
@@ -242,7 +248,9 @@ def run_unit(
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    return [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x]
+    # ``split("\n")`` et non ``splitlines()`` : U+2028, U+2029 ou U+0085 d'une sortie restent
+    # dans la ligne JSON (``json.dumps(ensure_ascii=False)`` ne les échappe pas)
+    return [json.loads(x) for x in Path(path).read_text(encoding="utf-8").split("\n") if x]
 
 
 def second_turn_items(
@@ -308,6 +316,23 @@ def check_manifest(out: Path, manifest: Mapping[str, Any], resume: bool) -> None
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(manifest, ensure_ascii=False, indent=1), "utf-8", newline="\n")
+
+
+def check_runtime(out: Path, runtime: Mapping[str, Any]) -> None:
+    """Refuse une reprise sous une autre version de llama-cpp-python ou un autre device.
+
+    Le manifeste fige le protocole ; ``runs.jsonl`` garde l'environnement de chaque reprise.
+    """
+    runs = Path(out) / "runs.jsonl"
+    if not runs.exists():
+        return
+    now = (runtime.get("llama_cpp"), runtime.get("device"))
+    for row in read_jsonl(runs):
+        old = (row.get("llama_cpp"), row.get("device"))
+        if old != now:
+            raise ValueError(
+                f"reprise sous un autre environnement : {old} puis {now} (llama-cpp, device)"
+            )
 
 
 BackendFactory = Callable[[ModelSpec], Any]
@@ -477,10 +502,21 @@ def judge_cached(
         run_judge,
         scores_by_arm,
     )
+    from mood_steering.eval.judge import (
+        MAX_TOKENS as JUDGE_MAX_TOKENS,
+    )
 
     cache = Path(out) / spec.model_id / "judge.json"
     if cache.exists():
-        return json.loads(cache.read_text(encoding="utf-8"))
+        cached = json.loads(cache.read_text(encoding="utf-8"))
+        # ancien cache sans ces clés : n_items vaut la taille d'échantillon demandée
+        old = (cached.get("sample_size", cached.get("n_items")), cached.get("seed", seed))
+        if old[0] is not None and old != (sample_size, seed):
+            raise ValueError(
+                f"juge déjà en cache ({cache}) pour un autre échantillon (taille, graine) "
+                f"{old} : supprimer le fichier pour rejuger"
+            )
+        return cached
     if client_factory is None:
         return None
     records = []
@@ -491,13 +527,22 @@ def judge_cached(
     log(f"juge {DEFAULT_MODEL} : {len(batch.items)} sorties, coût estimé {estimated:.4f} $")
     if estimated > max_cost:
         log(f"coût estimé au-delà du plafond de {max_cost:.2f} $ : juge non appelé")
-        return {"refused": True, "estimated_cost": estimated, "max_cost": max_cost}
+        return {
+            "refused": True,
+            "estimated_cost": estimated,
+            "max_cost": max_cost,
+            "sample_size": sample_size,
+            "seed": seed,
+        }
     meter = UsageMeter(client_factory())
     result = run_judge(batch, client=meter, model=DEFAULT_MODEL, max_cost_usd=max_cost)
     data = {
         "refused": False,
         "model": DEFAULT_MODEL,
         "n_items": len(batch.items),
+        "sample_size": sample_size,
+        "seed": seed,
+        "max_tokens": JUDGE_MAX_TOKENS,
         "estimated_cost": estimated,
         "real_cost": meter.cost(DEFAULT_MODEL),
         "input_tokens": meter.input_tokens,
@@ -718,7 +763,7 @@ def h2_section(results: Mapping[str, tuple[ModelSpec, Any, list[ArmExtra], Bench
 
 
 def demote(md: str) -> str:
-    return "\n".join(("#" + x) if x.startswith("#") else x for x in md.splitlines())
+    return "\n".join(("#" + x) if x.startswith("#") else x for x in md.split("\n"))
 
 
 def insert_before(md: str, marker: str, block: str) -> str:
@@ -798,9 +843,19 @@ def method_section(
         "bras.",
         f"- Exactitude : {protocol.n_mcq} QCM de `CohereLabs/Global-MMLU-Lite` (fr, questions "
         f"culturellement neutres `CA`, tirage graine {protocol.mcq_seed}), {protocol.mcq_tokens} "
-        "tokens ; une lettre non extraite compte faux.",
+        "tokens ; une lettre non extraite compte faux"
+        + (
+            " (SPEC : ~100 QCM, portés à 200 pour la puissance de la complaisance, "
+            "`docs/choix-contestation.md`)."
+            if protocol.n_mcq == 200
+            else "."
+        ),
         f"- Complaisance : second tour sur les items justes, contestation « {CHALLENGE_SELECTED} » "
-        "(`docs/choix-contestation.md`), même bras qu'au premier tour.",
+        "(`docs/choix-contestation.md`), même bras qu'au premier tour. Le dénominateur dépend "
+        "du bras : seuls les items justes au premier tour sont contestés, et un second tour "
+        "sans lettre extractible sort du compte. Un bras qui perd des items (format, "
+        "exactitude) est donc mesuré sur moins d'items, et pas forcément les mêmes : l'écart "
+        "de complaisance compare des sous-ensembles différents.",
         f"- Génération : llama-cpp-python {runtime.get('llama_cpp', '?')}, "
         f"{runtime.get('device', '?')}, n_ctx {protocol.n_ctx}, boucle bornée gloutonne "
         f"(`top_k=1`, température 0, sans pénalité de répétition) ; graine `seed + index` "
@@ -937,7 +992,9 @@ def _git_sha() -> str:
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p = argparse.ArgumentParser(
+        description=(__doc__ or "Campagne de mesure (story 3.5)").split("\n")[0]
+    )
     p.add_argument("--models", default="4b,2b,0.8b", help="clés parmi " + ", ".join(MODELS))
     p.add_argument("--out", type=Path, default=DEFAULT_OUT)
     p.add_argument("--models-dir", type=Path, default=Path("models") / "gguf")
@@ -1016,6 +1073,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.n_gpu_layers and not llama_cpp.llama_supports_gpu_offload():
         raise RuntimeError("--n-gpu-layers demandé mais roue llama-cpp-python sans GPU")
     runtime = {"llama_cpp": llama_cpp.__version__, "device": device, "git": _git_sha()}
+    check_runtime(args.out, runtime)
 
     def backend_factory(spec: ModelSpec) -> LlamaCppBackend:
         return LlamaCppBackend(

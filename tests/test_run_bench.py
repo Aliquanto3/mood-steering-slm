@@ -383,3 +383,51 @@ def test_judge_refused_above_cap(tmp_path):
     _reports(tmp_path, specs, no_client, max_cost=1e-6)
     text = (tmp_path / "rapport-verdict.md").read_text(encoding="utf-8")
     assert "Juge : non appelé" in text and "au-delà du plafond de 0.00 $" in text
+
+
+def test_run_unit_resumes_with_unicode_separators_and_cut_utf8(tmp_path):
+    """U+2028 et U+0085 restent dans la ligne ; un caractère UTF-8 coupé ne bloque pas."""
+    backend = FakeBackend()
+    items = [(Item(f"t{k}", f"prompt {k}"), k) for k in range(3)]
+    path = tmp_path / "neutral.jsonl"
+    part = tmp_path / "neutral.jsonl.part"
+    odd = {"item_id": "t0", "output": "a\u2028b\u0085c\u2029d"}
+    cut = json.dumps({"item_id": "t1", "output": "é"}, ensure_ascii=False).encode()[:-3]
+    part.write_bytes(json.dumps(odd, ensure_ascii=False).encode() + b"\n" + cut)
+    arm = Arm("neutral", KIND_NEUTRAL)
+    assert rb.run_unit(Steerer(backend), arm, items, path, run_id="r", model_id="m", max_tokens=8)
+    rows = rb.read_jsonl(path)
+    assert [r["item_id"] for r in rows] == ["t0", "t1", "t2"]
+    assert rows[0]["output"] == odd["output"]
+    assert backend.calls == ["prompt 1", "prompt 2"]
+
+
+def test_judge_cache_refuses_other_sample(tmp_path):
+    four = rb.MODELS["4b"]
+    run(tmp_path, [four])
+    kw = dict(seed=0, max_cost=1.0, client_factory=FakeJudgeClient, log=lambda s: None)
+    data = rb.judge_cached(tmp_path, four, sample_size=5, **kw)
+    assert data["sample_size"] == 5 and data["max_tokens"] == rb_judge_max_tokens()
+    assert rb.judge_cached(tmp_path, four, sample_size=5, **kw) == data
+    with pytest.raises(ValueError, match="autre échantillon"):
+        rb.judge_cached(tmp_path, four, sample_size=7, **kw)
+
+
+def rb_judge_max_tokens():
+    from mood_steering.eval.judge import MAX_TOKENS
+
+    return MAX_TOKENS
+
+
+def test_check_runtime_refuses_other_device(tmp_path):
+    rt = {"llama_cpp": "0.3.36", "device": "GPU (toutes les couches)"}
+    rb.check_runtime(tmp_path, rt)  # pas encore de reprise
+    (tmp_path / "runs.jsonl").write_text(json.dumps({**rt, "git": "x"}) + "\n", "utf-8")
+    rb.check_runtime(tmp_path, {**rt, "git": "y"})
+    with pytest.raises(ValueError, match="autre environnement"):
+        rb.check_runtime(tmp_path, {**rt, "device": "CPU"})
+
+
+def test_parse_args_without_docstring(monkeypatch):
+    monkeypatch.setattr(rb, "__doc__", None)
+    assert rb.parse_args([]).resume is False
