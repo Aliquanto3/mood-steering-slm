@@ -2,8 +2,8 @@
 
 Retire à la dose ``alpha`` la composante des activations sur une direction :
 ``h - alpha * (h . u) u`` avec ``u`` la direction normalisée. À ``alpha = 1`` la composante est
-supprimée, à ``0`` rien ne change. La direction est reprise d'ailleurs (``slm-weight-editing``, lot 1, ou diff du MIT) : elle
-n'est pas recherchée ici.
+supprimée, à ``0`` rien ne change. La direction est reprise d'ailleurs (``slm-weight-editing``,
+lot 1, ou diff du MIT) : elle n'est pas recherchée ici.
 
 `import mood_steering.ablation` n'importe ni torch ni transformers : ils ne sont chargés que par
 ``DirectionAblator`` et par la lecture des formats ``.pt`` / ``.safetensors`` (extra ``ablation``).
