@@ -3,7 +3,8 @@
 Le vecteur est produit par `llama-cvector-generator` (GGUF `controlvector`, tenseurs
 `direction.N` avec N = 1..layer_count, F32 1D [n_embd]) et rangé sous
 `data/moods/{model_id}/{axis}.gguf`. `load_vector` le relit en tableau (layer_count, n_embd),
-ligne 0 = couche 1, couches absentes à zéro : la forme attendue par `Steerer(il_start=1)`.
+ligne 0 = couche 1, couches absentes à zéro : la forme attendue par `Steerer` (vecteur
+complet, quelle que soit `il_start`).
 """
 
 from __future__ import annotations
