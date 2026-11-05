@@ -214,3 +214,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:56 · 1.4 · review · passe 2 lancée · —
 - 2026-11-05 01:57 · 2.3 · dev · fini, 291 tests ; constant/pulse, binding rappelé aux seuls changements, boucle bas niveau bornée à max_tokens pour generate/stream ; vérifié sur Qwen3.5-0.8B · 1b14b96
 - 2026-11-05 01:57 · 2.3 · second-avis · lancé · —
+- 2026-11-05 01:58 · 1.4 · review · passe 2 : 1 medium de doc corrigé (décision écrite) ; défaut antérieur trouvé : le Steerer envoie la plage sans décalage, llama.cpp lit le tampon à partir de la couche 1 (llama-adapter.cpp:129) · 1570dc9
+- 2026-11-05 01:58 · 1.4 · PR · #14 ouverte · 1570dc9
+- 2026-11-05 01:58 · 2.3 · décision · contrat du tampon : Steerer prend le vecteur complet (ligne 0 = couche 1) et il_start/il_end ; tampon envoyé de il_end lignes, lignes avant il_start à zéro ; à corriger dans la revue de 2.3 · —
