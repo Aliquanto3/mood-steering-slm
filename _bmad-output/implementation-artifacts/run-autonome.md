@@ -343,3 +343,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 07:54 · 5.4 · CI · verte (6 jobs) · 659c14b
 - 2026-11-05 07:54 · 5.4 · fusion · #25 fusionnée, MERGED vérifié · 014a49d
 - 2026-11-05 07:54 · 5.4 · attente humaine · relecture des 107 paires calme ↔ agitation par Anaël (non bloquante) · —
+- 2026-11-05 07:57 · run · fusion · #26 rapport de verdict (H5 à H7 renvoyées à leurs rapports ; doc de l'orchestrateur, second avis sauté, faits vérifiés contre les rapports), MERGED vérifié · 546e055
+- 2026-11-05 07:57 · run · ménage · données des worktrees copiées dans data/ et models/cuda-runtime du dépôt principal, puis 7 worktrees supprimés et prune · —
+- 2026-11-05 07:57 · run · PR · #27 version 0.2.0 ouverte · —
