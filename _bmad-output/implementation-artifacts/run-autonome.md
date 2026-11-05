@@ -338,3 +338,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 07:50 · 5.4 · review · passe 2 lancée (Sonnet) · —
 - 2026-11-05 07:50 · 5.4 · report · paires à valence équilibrée puis régénération ; calibration max_scale du calme et échelles 0,3/0,5 sur GPU ; proxy d'activation validé · —
 - 2026-11-05 07:50 · run · décision · Anaël valide deux suites possibles (v0.3) : (1) plafond de dose calculé par axe d'après le critère de fenêtre de contrôle (arXiv 2606.19831), en remplacement du max_scale repris de la joie ; (2) steering restreint aux neurones les plus discriminants des paires contrastées (arXiv 2605.12290, 2601.22594) pour un axe calme plus sélectif. Idée annexe : démo WebGPU dans le navigateur (cf. webml-community/neuron-studio) · —
+- 2026-11-05 07:52 · 5.4 · review · passe 2 (Sonnet) : 0 Important, 1 nit corrigé · 659c14b
+- 2026-11-05 07:52 · 5.4 · PR · #25 ouverte · 659c14b
