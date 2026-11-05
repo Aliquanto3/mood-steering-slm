@@ -317,3 +317,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:58 · 5.1 · review · lancée (Opus) avec deux bras de contrôle : constant sans prompt, décroissance seule · —
 - 2026-11-05 06:35 · 5.1 · review · passe 1 : 3 medium + 4 low corrigés ; bras de contrôle mesurés (GPU, 50 prompts) : constant sans prompt +0,19 → +0,35 au-dessus du neutre, décroissance seule +0,41 [+0,29 ; +0,53] du premier au dernier segment ; H6 non pour le pulse, oui réduit pour la décroissance · 94f64d8
 - 2026-11-05 06:35 · 5.1 · review · passe 2 lancée (Opus) · —
+- 2026-11-05 06:40 · 5.1 · review · passe 2 : 1 medium corrigé (lecture H6 réalignée sur les IC appariés), doc seule, passe 3 inutile · 90ab1f2
+- 2026-11-05 06:40 · 5.1 · PR · ouverte · 90ab1f2
+- 2026-11-05 06:40 · report · rapport-verdict.md dit encore « H6/H2/H5 non traitées » (texte généré par run_bench) : à réaligner après 5.4 · —
