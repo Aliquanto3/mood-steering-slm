@@ -1,24 +1,68 @@
 [project]
 name = "mood-steering"
-version = "0.0.0"
+version = "0.2.0"
 description = "Démonstrateur d'expression d'humeur d'un SLM par steering d'activations, comparé à un prompt de jeu de rôle."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "fastapi>=0.162.0",
+    "gguf>=0.19.0",
+    "numpy>=2.4.6",
+    "uvicorn>=0.54.0",
+]
+
+[project.optional-dependencies]
+llama = [
+    "llama-cpp-python>=0.3.36",
+]
+eval = [
+    "anthropic>=2.5.0",
+    "huggingface-hub>=0.36.2",
+    "protobuf>=7.36.2",
+    "pyarrow>=26.0.1",
+    "python-dotenv>=1.2.4",
+    "sentencepiece>=0.2.2",
+    "torch>=2.15.0",
+    "transformers<5",
+]
+# Qwen3.5 (lot anti-boucle) demande transformers >= 5, incompatible avec la borne de l'extra
+# ``eval`` : les deux extras sont déclarés en conflit ci-dessous. ``huggingface-hub`` et ``pyarrow``
+# servent au chargeur de QCM (``eval.datasets``) de ``scripts/run_antiloop.py``.
+ablation = [
+    "huggingface-hub",
+    "pyarrow>=26.0.1",
+    "torch>=2.15.0",
+    "transformers>=5.22.1",
+]
+frugal = [
+    "codecarbon>=3.3.2",
+]
 
 [build-system]
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mood_steering"]
+packages = ["src/mood_steering", "src/mood_steering_demo"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 # Outillage tiers vendu dans le dépôt (skills BMAD, kit de coûts) : hors du périmètre du lint.
 extend-exclude = [".claude", "_bmad", "_bmad-output"]
+
+[[tool.uv.index]]
+name = "llama-cpu"
+url = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+explicit = true
+
+# torch CPU sous Linux (CI : la roue PyPI par défaut tire CUDA, plusieurs Go) ; Windows et macOS
+# gardent PyPI.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
@@ -27,8 +71,16 @@ select = ["E", "F", "W", "I", "UP", "B"]
 testpaths = ["tests"]
 addopts = "-ra"
 
+[tool.uv]
+conflicts = [[{ extra = "eval" }, { extra = "ablation" }]]
+
+[tool.uv.sources]
+llama-cpp-python = { index = "llama-cpu" }
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
 [dependency-groups]
 dev = [
+    "httpx2>=2.16.0",
     "pytest>=9.2.0",
     "ruff>=0.17.3",
 ]

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expression d'humeur d'un petit modèle</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Expression d'humeur d'un petit modèle</h1>
+  <p class="intro">Un vecteur est ajouté aux activations du modèle pendant l'inférence (steering) ;
+  on compare le ton obtenu à celui d'un simple prompt de jeu de rôle. La démo montre
+  l'expression d'une humeur dans le texte, rien d'autre.</p>
+</header>
+<main>
+  <form id="form" autocomplete="off">
+    <div class="field">
+      <label for="prompt">Prompt</label>
+      <textarea id="prompt" rows="2" maxlength="2000" required>Raconte-moi ta journée en quelques phrases.</textarea>
+    </div>
+    <div class="field">
+      <label for="dose">Dose de steering : <output id="dose-value" for="dose">0,00</output></label>
+      <input id="dose" type="range" min="-1" max="1" step="0.05" value="0" aria-describedby="dose-help">
+      <span id="dose-help" class="help">−1 : pôle négatif (tristesse) · 0 : aucun effet · +1 : pôle positif (joie)</span>
+    </div>
+    <div class="field">
+      <label for="profile">Profil de dose</label>
+      <select id="profile" aria-describedby="profile-help">
+        <option value="constant" selected>Constant : la dose du curseur à tout token</option>
+        <option value="pulse">Impulsion : montée, pic, décroissance (le curseur donne le pic)</option>
+      </select>
+      <span id="profile-help" class="help">Impulsion : la dose monte de 0 au pic, puis décroît de moitié à chaque demi-vie.</span>
+    </div>
+    <div class="field" id="pulse-params" hidden>
+      <label for="rise">Montée (tokens jusqu'au pic)</label>
+      <input id="rise" type="number" min="0" max="512" step="1" value="48">
+      <label for="half-life">Demi-vie (tokens)</label>
+      <input id="half-life" type="number" min="1" max="512" step="1" value="32">
+    </div>
+    <div class="buttons">
+      <button id="generate" type="submit">Générer</button>
+      <button id="stop" type="button" disabled>Arrêter</button>
+    </div>
+    <p id="status" role="status" aria-live="polite"></p>
+  </form>
+  <section class="columns" aria-label="Textes générés">
+    <article class="col" id="col-neutral" role="region" aria-labelledby="title-neutral">
+      <h2 id="title-neutral">Neutre</h2>
+      <p class="badge" id="badge-neutral" hidden></p>
+      <div class="out" id="out-neutral"></div>
+    </article>
+    <article class="col" id="col-prompt_joyful" role="region" aria-labelledby="title-prompt_joyful">
+      <h2 id="title-prompt_joyful">Prompt joyeux</h2>
+      <p class="badge" id="badge-prompt_joyful" hidden></p>
+      <div class="out" id="out-prompt_joyful"></div>
+    </article>
+    <article class="col" id="col-steering" role="region" aria-labelledby="title-steering">
+      <h2 id="title-steering">Steering d'activations</h2>
+      <p class="badge" id="badge-steering" hidden></p>
+      <div class="out" id="out-steering"></div>
+    </article>
+  </section>
+  <section class="curve">
+    <h2>Courbe de dose (colonne steering)</h2>
+    <svg id="dose-curve" viewBox="0 0 400 140" role="img" aria-label="Dose appliquée au fil des tokens"></svg>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
