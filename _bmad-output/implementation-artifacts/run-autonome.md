@@ -191,3 +191,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:36 · 4.1 · second-avis · 1 high (Steerer partagés entre requêtes, reset au milieu d'une génération), 3 medium, 4 low · —
 - 2026-11-05 01:36 · 4.1 · décision · une seule génération active (409 sinon), annulation coopérative à la déconnexion, max_tokens ≤ 512, prompt ≤ 2000 caractères · —
 - 2026-11-05 01:36 · 4.1 · review · passe 1 lancée · —
+- 2026-11-05 01:41 · 4.1 · review · passe 1 : 1 high, 3 medium, 4 low corrigés (409, annulation, bornes, JSON ASCII, httpx2 en dev) · dd3cbe8
+- 2026-11-05 01:41 · 4.1 · PR · #12 ouverte · dd3cbe8
+- 2026-11-05 01:41 · 4.1 · review · passe 2 lancée (verrou, threads, stabilité des tests, légitimité de httpx2) · —
