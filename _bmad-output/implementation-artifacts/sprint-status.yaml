@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-04-2026 23:24
-last_updated: 11-04-2026 23:24
+last_updated: 11-05-2026 08:40
 project: mood-steering-slm
 project_key: NOKEY
 tracking_system: file-system
@@ -67,9 +67,71 @@ development_status:
   5-2-effet-de-taille-h2: done
   5-3-frugalité-avec-codecarbon-h7: done
   5-4-axe-calme-agitation-h5: done
-  epic-5-retrospective: optional
+  epic-5-retrospective: done
 
   epic-6: done
   6-1-ablation-de-direction-à-l-inférence-pile-c: done
   6-2-mesure-des-trois-bras-anti-boucle: done
-  epic-6-retrospective: optional
+  epic-6-retrospective: done
+action_items:
+  - id: "epic-5-retro-item-1-a1-run_antiloop-et-run_pulse-lecture-jso"
+    epic: 5
+    action: "A1 run_antiloop et run_pulse : lecture JSONL sur \n et reprise atomique,
+      test U+2028, avant la relance 6.2"
+    owner: "dev-story"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
+  - id: "epic-5-retro-item-2-a3-relance-5-4-paires-relues-et-équilibr"
+    epic: 5
+    action: "A3 relance 5.4 : paires relues et équilibrées, calme calibré, échelles
+      0,3/0,5 sur GPU, proxy d activation validé"
+    owner: "Anaël puis dev-story"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
+  - id: "epic-5-retro-item-3-a4-mesure-h7-sur-le-4b-en-gpu-machine-au"
+    epic: 5
+    action: "A4 mesure H7 sur le 4B en GPU, machine au repos (optionnel)"
+    owner: "Anaël puis dev-story"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
+  - id: "epic-5-retro-item-4-a5-story-v0-3-module-commun-jsonl-repren"
+    epic: 5
+    action: "A5 story v0.3 : module commun JSONL reprenable, bootstrap apparié, percentile
+      ; critère de dose utile unique ; chemin d énergie mort retiré"
+    owner: "orchestrateur"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
+  - id: "epic-5-retro-item-5-a6-seuils-des-hypothèses-bonus-pré-enreg"
+    epic: 5
+    action: "A6 seuils des hypothèses bonus pré-enregistrés dans hypotheses-et-seuils.md
+      avant la story"
+    owner: "Anaël"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
+  - id: "epic-5-retro-item-6-a7-modèle-run-autonome-colonne-ressource"
+    epic: 5
+    action: "A7 modèle run-autonome : colonne Ressource exclusive (GPU) et pilote
+      n≈10 non saturé avant toute campagne longue"
+    owner: "Anaël (agent-cost-kit)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
+  - id: "epic-5-retro-item-7-a8-second-avis-jamais-sauté-même-pour-un"
+    epic: 5
+    action: "A8 second avis jamais sauté, même pour une doc de l orchestrateur"
+    owner: "orchestrateur"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
+  - id: "epic-5-retro-item-8-a9-pr-chore-etat-run-vers-main-suppressi"
+    epic: 5
+    action: "A9 PR chore/etat-run vers main ; suppression des branches worktree-agent-*
+      et des branches distantes fusionnées"
+    owner: "orchestrateur"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
+  - id: "epic-6-retro-item-9-a2-relance-6-2-après-a1-pilote-10-items"
+    epic: 6
+    action: "A2 relance 6.2 après A1 : pilote 10 items à 2048 tokens (origine < 80
+      % tronquées sinon 4096), n réduit, contrôle croisé slm-quality-bench chiffré"
+    owner: "Anaël puis dev-story"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-05.md"

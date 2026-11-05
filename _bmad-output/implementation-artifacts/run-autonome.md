@@ -349,3 +349,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 07:58 · run · fusion · #27 version 0.2.0, MERGED vérifié · 51e00e0
 - 2026-11-05 07:58 · run · décision · tag v0.2.0 et release GitHub publiés ; topic status-bench conservé · 51e00e0
 - 2026-11-05 07:58 · run · fin · epics 1 à 6 done ; attente humaine : relecture des paires calme ↔ agitation (5.4), test de la démo sur le portable (4.3) · 51e00e0
+- 2026-11-05 08:34 · run · rétro · epics 5 (accepted-with-open-items) et 6 (rejected, décision d'Anaël), 9 actions · —
