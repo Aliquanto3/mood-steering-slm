@@ -6,12 +6,15 @@ Les lectures par bras sont écrites dans ``energy.json`` du run, à côté des J
 
 Branchement réel : ``scripts/run_bench.py --energy`` mesure chaque unité de la phase ton
 (``energy_units.json``) et écrit les lectures par bras avec ``write_energy``.
+``--energy-repeats K`` répète cette mesure sur K tours à l'ordre des bras alterné ;
+``system_load`` relève la charge de la machine au lancement.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+import subprocess
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -96,6 +99,47 @@ class CodeCarbonTracker:
             emissions_kg=float(emissions if emissions is not None else data.emissions),
             duration_s=float(data.duration),
         )
+
+
+def system_load(
+    *,
+    run: Callable[..., Any] = subprocess.run,
+    cpu_percent: Callable[[], float] | None = None,
+) -> dict[str, Any]:
+    """Relevé de charge avant mesure (« machine au repos ») : GPU via ``nvidia-smi``, CPU.
+
+    Chaque grandeur vaut ``None`` si elle n'est pas lisible (pas de ``nvidia-smi``, pas de
+    ``psutil``) : le relevé ne fait jamais échouer une campagne.
+    """
+    gpu: dict[str, int] | None = None
+    try:
+        res = run(
+            [
+                "nvidia-smi",
+                "--query-gpu=utilization.gpu,memory.used",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if res.returncode == 0:
+            util, mem = (int(x) for x in res.stdout.strip().splitlines()[0].split(","))
+            gpu = {"utilization_pct": util, "memory_used_mib": mem}
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+        gpu = None
+    cpu: float | None = None
+    try:
+        if cpu_percent is None:
+            import psutil
+
+            def cpu_percent() -> float:
+                return float(psutil.cpu_percent(interval=1.0))
+
+        cpu = float(cpu_percent())
+    except Exception:  # pas de psutil, accès refusé (OSError)… : jamais bloquant
+        cpu = None
+    return {"gpu": gpu, "cpu_percent": cpu}
 
 
 def write_energy(out_dir: Path, readings: Mapping[str, EnergyReading]) -> Path:
