@@ -379,3 +379,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-06 00:23 · A4 · pilote · refusé (plancher --n-tone >= 50 pour le 4B) ; mesure complète lancée, ses premières unités servent de pilote · —
 - 2026-11-06 00:27 · A2 · dev · rapport fini : ablation 1,0 +0,16 [0,06 ; 0,28], McNemar p=0,021 (non corrigé, Bonferroni 0,017 non passé) ; chirurgie et ablation 0,5 +0,08, IC contenant 0 ; contrôle croisé +0,297 [0,250 ; 0,344] ; ajout run_antiloop --report · 0c0bc0c
 - 2026-11-06 00:27 · A2 · second-avis · lancé · —
+- 2026-11-06 00:30 · A2 · second-avis · chiffres tous confirmés ; 4 medium (contrôle croisé apparié possible via question_hash, écart du bench hors de l'IC de la chirurgie, surinterprétation de l'ablation 1,0, agrégat bench mêlant le plafond rag 2048), 3 low ; incident : tentative de téléchargement HF par le second avis, sans écriture · 0c0bc0c
+- 2026-11-06 00:30 · A2 · review · passe 1 lancée (Opus) · —
+- 2026-11-06 00:30 · A4 · mesure · 1er bras 206 s, 3,45 Wh : non saturée ; 35 passes, fin estimée ~02 h 25 · —
