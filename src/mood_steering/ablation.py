@@ -11,7 +11,7 @@ lot 1, ou diff du MIT) : elle n'est pas recherchée ici.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -77,8 +77,14 @@ def load_direction(
     ``model.language_model.layers.15.mlp.down_proj.weight`` et ``...layers.19...`` diffèrent
     (forme 1024 x 3584, 64 colonnes touchées) ; chaque delta est de rang 1 (1re valeur singulière
     1,75 et 1,40, contre ~1e-3 pour les suivantes). La direction est son 1er vecteur singulier
-    gauche, de dimension 1024 = hidden_size de Qwen3.5-0.8B (vérifié). À exporter en ``.npy``
-    hors du dépôt (jamais versionnée ici : AGENTS.md).
+    gauche, de dimension 1024 = hidden_size de Qwen3.5-0.8B (vérifié). La direction est donc
+    PAR COUCHE : une pour la couche 15, une pour la 19 (|cos| = 0,849 entre les deux, pas la
+    même) ; chacune s'ablate sur la sortie de sa couche (``DirectionAblator`` avec un dict
+    ``{15: u15, 19: u19}``). Export ``.npy`` hors du dépôt : ``spikes/export_mit_direction.py``,
+    vers ``data/directions/`` (ignoré par git, jamais versionné : AGENTS.md).
+
+    Les tenseurs BF16 (``.safetensors`` ou ``.pt``) sont lus via torch puis convertis en
+    float32 ; sans torch, un ``.safetensors`` BF16 est refusé avec un message explicite.
     """
     p = Path(path)
     suffix = p.suffix.lower()
@@ -89,9 +95,7 @@ def load_direction(
     if suffix == ".npy":
         arr = np.load(p, allow_pickle=False)
     elif suffix == ".safetensors":
-        from safetensors.numpy import load_file
-
-        arr = _pick(load_file(str(p)), key, p)
+        arr = _load_safetensors(p, key)
     else:
         import torch
 
@@ -109,6 +113,24 @@ def load_direction(
     return arr.astype(np.float32)
 
 
+def _load_safetensors(path: Path, key: str | None) -> np.ndarray:
+    try:
+        import torch  # noqa: F401
+        from safetensors.torch import load_file as load_torch
+    except ImportError:
+        from safetensors.numpy import load_file as load_numpy
+
+        try:
+            tensors = load_numpy(str(path))
+        except TypeError as exc:  # BF16 : numpy n'a pas ce dtype
+            raise ValueError(
+                f"{path.name} : dtype non lisible sans torch (BF16 ?) ; installer l'extra "
+                "ablation ou convertir la direction en float32"
+            ) from exc
+        return np.asarray(_pick(tensors, key, path))
+    return _pick(load_torch(str(path)), key, path).detach().float().numpy()
+
+
 def _pick(tensors: dict[str, Any], key: str | None, path: Path) -> Any:
     if key is not None:
         if key not in tensors:
@@ -120,29 +142,55 @@ def _pick(tensors: dict[str, Any], key: str | None, path: Path) -> Any:
 
 
 class DirectionAblator:
-    """Pose des hooks ``forward`` qui ablatent ``direction`` en sortie des couches de décodeur.
+    """Pose des hooks ``forward`` qui ablatent une direction en sortie des couches de décodeur.
 
     ``model`` : modèle `transformers` (ou module factice) ; les couches sont lues dans
-    ``model.model.layers`` (repli ``model.model.language_model.layers``). ``layers`` : indices à
-    traiter (``None`` = toutes). ``alpha`` est modifiable sans recharger (``ablator.alpha = 0.5``) ;
-    ``remove()`` retire les hooks. Les sorties en tuple des couches HF sont gérées : seul le
-    premier élément (états cachés) est modifié.
+    ``model.model.layers`` (repli ``model.model.language_model.layers``). ``direction`` : un
+    vecteur unique, appliqué à toutes les couches de ``layers`` (``None`` = toutes), ou un dict
+    ``{indice de couche: direction}`` (une direction par couche, cas du diff du MIT ; ``layers``
+    doit alors rester ``None``). La dimension est vérifiée contre ``model.config`` (``hidden_size``
+    ou ``text_config.hidden_size``) quand il existe. ``alpha`` est modifiable sans recharger
+    (``ablator.alpha = 0.5``) ; ``remove()`` retire les hooks. Les sorties en tuple des couches HF
+    sont gérées : seul le premier élément (états cachés) est modifié. La projection est calculée
+    en float32 puis ramenée au dtype du modèle (bf16 / fp16).
     """
 
     def __init__(
-        self, model: Any, direction: np.ndarray, alpha: float, layers: Iterable[int] | None = None
+        self,
+        model: Any,
+        direction: np.ndarray | Mapping[int, np.ndarray],
+        alpha: float,
+        layers: Iterable[int] | None = None,
     ) -> None:
         import torch
 
         self._alpha = check_alpha(alpha)
-        self._unit = torch.as_tensor(_unit(np.asarray(direction, dtype=np.float32)))
         stack = _find_layers(model)
-        idx = list(range(len(stack))) if layers is None else list(layers)
-        for i in idx:
+        if isinstance(direction, Mapping):
+            if layers is not None:
+                raise ValueError("layers doit être None quand direction est un dict par couche")
+            per_layer = {int(i): d for i, d in direction.items()}
+            if not per_layer:
+                raise ValueError("dict de directions vide")
+        else:
+            idx = range(len(stack)) if layers is None else layers
+            per_layer = {int(i): direction for i in idx}
+        hidden = _hidden_size(model)
+        units: dict[int, Any] = {}
+        for i, d in per_layer.items():
             if not 0 <= i < len(stack):
                 raise IndexError(f"couche {i} hors de [0, {len(stack)})")
-        self.layers = idx
-        self._handles = [stack[i].register_forward_hook(self._hook) for i in idx]
+            u = _unit(np.asarray(d, dtype=np.float32)).astype(np.float32)
+            if hidden is not None and u.shape[0] != hidden:
+                raise ValueError(
+                    f"dimension de la direction (couche {i}) {u.shape[0]} != hidden_size {hidden}"
+                )
+            units[i] = torch.as_tensor(u)
+        self.layers = sorted(units)
+        self._units = units
+        self._handles = [
+            stack[i].register_forward_hook(self._make_hook(units[i])) for i in self.layers
+        ]
 
     @property
     def alpha(self) -> float:
@@ -152,21 +200,36 @@ class DirectionAblator:
     def alpha(self, value: float) -> None:
         self._alpha = check_alpha(value)
 
-    def _ablate(self, h: Any) -> Any:
-        u = self._unit.to(device=h.device, dtype=h.dtype)
-        return h - self._alpha * (h @ u).unsqueeze(-1) * u
+    def _ablate(self, h: Any, unit: Any) -> Any:
+        import torch
 
-    def _hook(self, _module: Any, _inputs: Any, output: Any) -> Any:
-        if self._alpha == 0.0:
-            return output
-        if isinstance(output, tuple):
-            return (self._ablate(output[0]), *output[1:])
-        return self._ablate(output)
+        hf = h.to(torch.float32)
+        u = unit.to(device=h.device)
+        return (hf - self._alpha * (hf @ u).unsqueeze(-1) * u).to(h.dtype)
+
+    def _make_hook(self, unit: Any) -> Any:
+        def hook(_module: Any, _inputs: Any, output: Any) -> Any:
+            if self._alpha == 0.0:
+                return output
+            if isinstance(output, tuple):
+                return (self._ablate(output[0], unit), *output[1:])
+            return self._ablate(output, unit)
+
+        return hook
 
     def remove(self) -> None:
         for handle in self._handles:
             handle.remove()
         self._handles = []
+
+
+def _hidden_size(model: Any) -> int | None:
+    config = getattr(model, "config", None)
+    for owner in (config, getattr(config, "text_config", None)):
+        size = getattr(owner, "hidden_size", None)
+        if isinstance(size, int):
+            return size
+    return None
 
 
 def _find_layers(model: Any) -> Any:

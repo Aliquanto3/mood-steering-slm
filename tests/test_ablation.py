@@ -202,3 +202,74 @@ def test_direction_ablator_bad_layer():
 
     with pytest.raises(IndexError):
         DirectionAblator(_toy_model(torch, False), np.ones(DIM), 0.5, layers=[2])
+
+
+def test_direction_ablator_per_layer_dict(rng):
+    torch = pytest.importorskip("torch")
+    from mood_steering.ablation import DirectionAblator
+
+    u0 = rng.normal(size=DIM).astype(np.float32)
+    u1 = rng.normal(size=DIM).astype(np.float32)
+    h = rng.normal(size=(2, 4, DIM)).astype(np.float32)
+    model = _toy_model(torch, True)
+    ab = DirectionAblator(model, {0: u0, 1: u1}, alpha=1.0)
+    assert ab.layers == [0, 1]
+    # Couche 0 : ablation de u0 sur 2h ; couche 1 : x2 puis ablation de u1.
+    expected = ablate(2.0 * ablate(2.0 * h, u0, 1.0), u1, 1.0)
+    got = model(torch.from_numpy(h)).detach().numpy()
+    np.testing.assert_allclose(got, expected, atol=1e-4)
+    with pytest.raises(ValueError, match="layers doit être None"):
+        DirectionAblator(model, {0: u0}, alpha=1.0, layers=[0])
+    with pytest.raises(IndexError):
+        DirectionAblator(model, {5: u0}, alpha=1.0)
+
+
+def test_direction_ablator_bf16_projection_in_float32(rng):
+    torch = pytest.importorskip("torch")
+    from mood_steering.ablation import DirectionAblator
+
+    u = rng.normal(size=DIM).astype(np.float32)
+    h = rng.normal(size=(2, 4, DIM)).astype(np.float32)
+    model = _toy_model(torch, False)
+    DirectionAblator(model, u, alpha=1.0, layers=[1])
+    x = torch.from_numpy(h).to(torch.bfloat16)
+    out = model(x)
+    assert out.dtype == torch.bfloat16
+    # Tolérance bf16 (8 bits de mantisse, ~4e-3 relatif) sur des valeurs d'ordre 4 : 5e-2.
+    ref = ablate(4.0 * x.float().numpy(), u, 1.0)
+    np.testing.assert_allclose(out.float().numpy(), ref, atol=5e-2)
+    un = u / np.linalg.norm(u)
+    assert np.abs(out.float().numpy() @ un).max() < 5e-2
+
+
+def test_direction_ablator_checks_hidden_size_from_config():
+    torch = pytest.importorskip("torch")
+    from types import SimpleNamespace
+
+    from mood_steering.ablation import DirectionAblator
+
+    model = _toy_model(torch, False)
+    model.config = SimpleNamespace(text_config=SimpleNamespace(hidden_size=DIM + 1))
+    with pytest.raises(ValueError, match="hidden_size"):
+        DirectionAblator(model, np.ones(DIM), 0.5)
+    model.config = SimpleNamespace(hidden_size=DIM)
+    DirectionAblator(model, np.ones(DIM), 0.5).remove()
+
+
+def test_load_direction_safetensors_bf16(tmp_path):
+    torch = pytest.importorskip("torch")
+    st = pytest.importorskip("safetensors.torch")
+    v = torch.linspace(-1, 1, 8).to(torch.bfloat16)
+    st.save_file({"direction": v}, str(tmp_path / "bf16.safetensors"))
+    got = load_direction(tmp_path / "bf16.safetensors", expected_dim=8)
+    assert got.dtype == np.float32
+    np.testing.assert_array_equal(got, v.float().numpy())
+
+
+def test_load_direction_safetensors_bf16_without_torch(tmp_path, monkeypatch):
+    torch = pytest.importorskip("torch")
+    st = pytest.importorskip("safetensors.torch")
+    st.save_file({"d": torch.ones(8, dtype=torch.bfloat16)}, str(tmp_path / "bf16.safetensors"))
+    monkeypatch.setitem(sys.modules, "safetensors.torch", None)  # simule l'absence de torch
+    with pytest.raises(ValueError, match="BF16"):
+        load_direction(tmp_path / "bf16.safetensors", expected_dim=8)
