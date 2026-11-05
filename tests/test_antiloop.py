@@ -303,3 +303,18 @@ def test_paired_report(tmp_path):
     assert a["diff"] == -0.5
     assert (a["only_reference"], a["only_arm"]) == (0, 2)
     assert set(rep["truncated"]) == {"ablation_a1"}
+
+
+def test_main_report_refuse_items_d_une_autre_source(tmp_path, monkeypatch):
+    import mood_steering.eval.datasets as datasets
+
+    run_dir = tmp_path / "r"
+    run_dir.mkdir()
+    (run_dir / "config.json").write_text(
+        json.dumps({"n": 4, "item_sources": ["gmmlu-fr"]}), encoding="utf-8"
+    )
+    monkeypatch.setattr(antiloop, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(datasets, "load_global_mmlu_lite", lambda n: _items(n))  # repli MMMLU
+    with pytest.raises(SystemExit):
+        antiloop.main(["--run-id", "r", "--report"])
+    assert not (run_dir / "paired.json").exists()

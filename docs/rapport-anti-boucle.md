@@ -1,6 +1,6 @@
 ﻿# Rapport anti-boucle : chirurgie des poids ou ablation dosable
 
-Statut : deux mesures. Run `antiloop-full` du 2026-11-05 (story bonus 6.2, SPEC CAP-9, 512 tokens) : le plafond sature tous les bras, la mesure ne discrimine pas. Relance du 2026-11-06 (action A2 de la rétro de l'epic 6, run `antiloop-2048-n50`, 2048 tokens, n=50) : l'ablation à dose 1,0 réduit les réponses tronquées de 16 points (IC95 apparié [6 ; 28]), les autres écarts ne sont pas détectables ; le contrôle croisé `slm-quality-bench` montre un écart d'environ 30 points pour la chirurgie sous Ollama à 4096 tokens (voir Résultats de la relance et Lecture).
+Statut : deux mesures. Run `antiloop-full` du 2026-11-05 (story bonus 6.2, SPEC CAP-9, 512 tokens) : le plafond sature tous les bras, la mesure ne discrimine pas. Relance du 2026-11-06 (action A2 de la rétro de l'epic 6, run `antiloop-2048-n50`, 2048 tokens, n=50) : l'ablation à dose 1,0 donne un indice de baisse des réponses tronquées (16 points, IC95 apparié [6 ; 28], McNemar p = 0,021), non confirmé après correction des trois comparaisons ; les autres écarts ne sont pas détectables. Le contrôle croisé `slm-quality-bench` (Ollama, apparié) montre pour la chirurgie un écart de 31 points hors usage rag (plafond 4096), IC95 [28 ; 35], hors de l'IC de la relance : désaccord non expliqué (voir Résultats de la relance, Lecture et État des critères).
 
 ## Question
 
@@ -45,7 +45,7 @@ Sorties : `data/runs/antiloop/<id>/<bras>.jsonl` (une ligne par item, reprise en
 
 ## Comparaison avec slm-quality-bench
 
-`slm-quality-bench` mesure aussi le bras chirurgie (GGUF édité servi par Ollama) et en tire un taux tronqué par piste et par catégorie (`summary.json`). Ses conditions diffèrent (Ollama, quantification Q8_0, jeux et plafond propres), donc ses chiffres ne se mélangent pas à ceux de ce script : ils servent de contrôle croisé. Pour les comparer :
+`slm-quality-bench` mesure aussi le bras chirurgie (GGUF édité servi par Ollama) et en tire un taux tronqué par piste et par catégorie (`summary.json`). Ses conditions diffèrent (Ollama, quantification Q8_0, jeux et plafond propres), donc ses chiffres ne se mélangent pas à ceux de ce script : ils servent de contrôle croisé. Q8_0 : quantification du GGUF officiel de `qwen3.5:0.8b`, dont `slm-weight-editing` remplace les deux tenseurs édités, requantifiés en Q8_0 (README de `slm-weight-editing`) ; la campagne n'enregistre que les digests Ollama. Pour les comparer :
 
 1. lire le taux tronqué de la piste `think_on` de `qwen3.5:0.8b` et de `qwen3.5-wsp:0.8b` dans leurs `summary.json` (`slm-weight-editing report-gguf` / `compare` en donne l'écart avec IC95) ;
 2. vérifier que le sens et l'ordre de grandeur de l'écart origine / chirurgie concordent avec ceux mesurés ici (transformers, bf16) ;
@@ -57,7 +57,7 @@ Contrôle fait le 2026-11-06 (campagne `wsp-20261104`, voir Résultats de la rel
 
 Relance décidée par la rétro de l'epic 6 (constats E6-1 et E6-2) : le plafond de 512 tokens saturait tout. Règle fixée avant la mesure : un pilote de l'origine seule (`antiloop-pilote-2048`, n=10, 2048 tokens, environ 54 s par item) donne 0,60 de tronquées [0,30 ; 0,90] ; moins de 80 %, donc on reste à 2048 (sinon 4096).
 
-Run `antiloop-2048-n50` : quatre bras, les 50 mêmes items Global-MMLU-Lite (fr), `max_new_tokens=2048`, `enable_thinking=True`, génération gloutonne, bf16, torch 2.6.0+cu124, transformers 5.22.1, GPU RTX 3050 8 Go utilisé seul. IC95 des taux : bootstrap percentile. Écarts : `--report` (bootstrap apparié, 5000 tirages, graine 0) et McNemar exact sur les paires discordantes (origine seule / bras seul).
+Run `antiloop-2048-n50` : quatre bras, les 50 mêmes items Global-MMLU-Lite (fr), `max_new_tokens=2048`, `enable_thinking=True`, génération gloutonne, bf16, torch 2.6.0+cu124, transformers 5.22.1, GPU RTX 3050 8 Go utilisé seul. IC95 des taux : bootstrap percentile. Écarts : `--report` (bootstrap apparié, 5000 tirages, graine 0) et McNemar exact sur les paires discordantes (origine seule / bras seul) ; les deux tableaux d'écarts ci-dessous recopient `data/runs/antiloop/antiloop-2048-n50/paired.json`, écrit le 2026-11-06.
 
 | Bras | Tronquées (IC95) | Exactitude (IC95) | Non extraites | Tokens moyens |
 |---|---|---|---|---|
@@ -76,14 +76,22 @@ Run `antiloop-2048-n50` : quatre bras, les 50 mêmes items Global-MMLU-Lite (fr)
 
 Même lecture sur l'exactitude (`origin − bras`, négatif : le bras est meilleur) : ablation@0.5 −0,08 [−0,20 ; 0,04] (3 / 7, p 0,34) ; ablation@1 −0,16 [−0,28 ; −0,06] (1 / 9, p 0,021) ; surgery −0,10 [−0,22 ; 0,02] (3 / 8, p 0,23). L'exactitude suit les tronquées parce qu'une réponse tronquée compte fausse.
 
-Contrôle croisé `slm-quality-bench` (campagne `wsp-20261104`, jeu `set-v3`, 8 usages, Ollama 0.40.14, plafond 4096 tokens et 2048 pour l'usage rag : plafonds différents de ceux du tableau ci-dessus, donc tableau séparé), piste `think_on`, global, vérifié dans `summary.json` :
+Contrôle croisé `slm-quality-bench` (campagne `wsp-20261104`, jeu `set-v3`, 7 usages, Ollama 0.40.14, plafond 4096 tokens et 2048 pour l'usage rag : plafonds différents de ceux du tableau ci-dessus, donc tableau séparé), piste `think_on`, global (tous usages, plafonds mélangés), vérifié dans `summary.json` :
 
 | Modèle | Tronquées / évaluées | Taux |
 |---|---|---|
 | `qwen3.5:0.8b` | 558 / 765 | 0,729 |
 | `qwen3.5-wsp:0.8b` | 333 / 770 | 0,432 |
 
-Écart origine − chirurgie : +0,297, IC95 [0,250 ; 0,344] (deux proportions indépendantes, approximation normale ; Newcombe [0,249 ; 0,343]). Les `scores/*.jsonl` n'ont pas d'indicateur de troncature par unité : l'appariement des questions est impossible pour ce critère, l'IC est celui de deux proportions et l'ignore. Piste `think_off` : 49 / 772 (0,063) contre 43 / 773 (0,056), écart +0,008 [−0,016 ; 0,031], sans écart. Sur la piste `think_on`, l'écart varie beaucoup selon l'usage (de 0 point à plus de 50 points ; un usage ne tronque jamais).
+Appariement : les `scores/*.jsonl` donnent par unité le `question_hash` et le `status` (`truncated`). Le contrôle apparié ci-dessous garde les questions notées pour les deux modèles, avec les mêmes exclusions que `summary.json` (source `oneruler-fr-cwe` exclue des agrégats, lignes sans score, donc erreurs et `context_exceeded`) ; il reste 764 paires sur la piste `think_on` (765 et 770 lignes notées par modèle dans `summary.json`). Écart `origine − chirurgie`, IC95 par bootstrap apparié (5000 tirages, graine 0), McNemar exact sur les paires discordantes (origine seule / chirurgie seule) :
+
+| Périmètre `think_on` | Paires | Origine | Chirurgie | Écart (IC95 apparié) | Discordants | McNemar p |
+|---|---|---|---|---|---|---|
+| global (plafonds 4096 et 2048 mélangés) | 764 | 0,730 | 0,436 | +0,295 [0,262 ; 0,330] | 234 / 9 | < 10⁻⁵⁰ |
+| hors rag (plafond 4096 seul) | 678 | 0,701 | 0,388 | +0,313 [0,276 ; 0,351] | 220 / 8 | < 10⁻⁵⁰ |
+| rag seul (plafond 2048) | 86 | 0,965 | 0,814 | +0,151 [0,070 ; 0,233] | 14 / 1 | 0,001 |
+
+Calcul fait le 2026-11-06 avec le chargeur de `slm-quality-bench` (`report.inputs.load_inputs`, lecture seule) ; la première version de ce rapport donnait un IC de deux proportions indépendantes ([0,250 ; 0,344]) en croyant l'appariement impossible, ce qui était faux. Piste `think_off` : 770 paires, 0,064 contre 0,056, écart +0,008 [−0,006 ; 0,022] (18 / 12, p 0,36), sans écart. Sur la piste `think_on`, l'écart varie beaucoup selon l'usage (de 0 point à plus de 50 points ; un usage ne tronque jamais).
 
 ## Résultats du run historique `antiloop-full` (512 tokens, n=100)
 
@@ -103,10 +111,10 @@ Données brutes : `data/runs/antiloop/antiloop-full/` (ignoré par git, une lign
 Lecture de la relance (2048 tokens, n=50) :
 
 - À 2048 tokens, 78 % des générations de l'origine atteignent encore le plafond : la saturation a baissé (97 % à 512) mais reste forte, et la mesure ne sépare toujours pas une boucle d'un raisonnement long. Avec n=50, on ne voit que des écarts d'environ 15 points.
-- Seule l'ablation à dose 1,0 a un IC95 apparié qui exclut 0, sur les tronquées (+16 points [6 ; 28]) comme sur l'exactitude (+16 points). Le McNemar exact va dans le même sens (9 contre 1, p = 0,021) ; non corrigé des trois comparaisons, il ne passe pas le seuil de Bonferroni (0,017). À lire comme un indice, pas comme une preuve.
+- Seule l'ablation à dose 1,0 a un IC95 apparié (non corrigé) qui exclut 0, sur les tronquées (+16 points [6 ; 28]) comme sur l'exactitude (+16 points). Le McNemar exact repose sur 10 paires discordantes (9 contre 1, p = 0,021) ; corrigé des trois comparaisons, il ne passe pas le seuil de Bonferroni (0,017). C'est un indice, non confirmé après correction de multiplicité.
 - L'ablation à dose 0,5 et la chirurgie vont dans le même sens (+8 points) sans écart détectable ici. L'ordre des doses (0,5 puis 1,0) est cohérent avec un effet dose, mais sur deux doses et un seul tirage.
-- La chirurgie va dans le même sens que `slm-quality-bench`, mais sans écart détectable ici. Le contrôle croisé montre un écart net (environ 30 points, IC95 [25 ; 34]) à 4096 tokens sous Ollama (GGUF Q8_0, autre jeu, autres usages). Les conditions diffèrent trop (plafond, pile, quantification, jeu) pour dire que la relance reproduit ou infirme cet écart : +8 points [−6 ; 22] est compatible avec lui sans le confirmer.
-- Ce que la relance permet de conclure : l'ablation de la direction à dose 1,0 diminue vraisemblablement les réponses tronquées de Qwen3.5-0.8B sur ces items. Ce qu'elle ne permet pas : comparer ablation et chirurgie (leurs IC se recouvrent), établir un effet de l'ablation à 0,5, dire que les réponses évitées étaient des boucles, ni généraliser hors de ces 50 items.
+- La chirurgie va dans le même sens que `slm-quality-bench`, mais les deux mesures sont en désaccord sur l'ampleur : le contrôle croisé donne +31 points hors rag (plafond 4096, IC95 apparié [28 ; 35]), la relance +8 points [−6 ; 22], et 0,30 est hors de l'IC de la relance. Explications possibles, non départagées ici : plafond (2048 ici, où 78 % de l'origine sature et écrase l'écart, contre 4096 ; l'usage rag du bench, plafonné à 2048, montre lui aussi un écart plus petit, +15 points), pile (transformers bf16 contre Ollama et GGUF Q8_0), jeu d'items (QCM Global-MMLU-Lite contre les usages de `set-v3`), taille (50 items contre 678 paires). La relance ne reproduit pas l'écart du bench, sans l'infirmer.
+- Ce que la relance permet de conclure : un indice, non confirmé après correction de multiplicité, que l'ablation de la direction à dose 1,0 diminue les réponses tronquées de Qwen3.5-0.8B sur ces items. Ce qu'elle ne permet pas : comparer ablation et chirurgie (leurs IC se recouvrent), établir un effet de l'ablation à 0,5, dire que les réponses évitées étaient des boucles, ni généraliser hors de ces 50 items.
 
 Lecture du run historique `antiloop-full` (512 tokens, n=100) : 96 à 97 % de réponses tronquées dans chaque bras, longueur moyenne d'environ 508 tokens, quatre bras indiscernables (avec n=100, seul un écart d'environ 5 points ou plus serait visible) et exactitude (2 à 3 %) proche de zéro. À ce plafond, le critère sature avant de distinguer une boucle d'un raisonnement long ; la mesure ne contredisait pas l'effet rapporté par le MIT, elle n'avait pas la résolution pour le voir. C'est ce constat qui a motivé la relance.
 
@@ -118,6 +126,11 @@ Limites :
 - 50 items, un seul tirage, génération gloutonne ; trois comparaisons sans correction de multiplicité ;
 - modèle de 0,8 milliard de paramètres, direction issue de la chirurgie elle-même ;
 - bf16 sur transformers avec le repli PyTorch des noyaux de Qwen3.5 (pas de `causal_conv1d` ni `flash-linear-attention`), plus lent ; son effet sur les résultats n'est pas mesuré ;
-- contrôle croisé fait, mais non comparable chiffre à chiffre : Ollama, Q8_0, autre jeu, autre plafond, et pas d'indicateur de troncature par unité pour apparier.
+- contrôle croisé fait et apparié côté bench, mais non comparable chiffre à chiffre avec la relance : Ollama, Q8_0, autre jeu, autre plafond.
 
-Suite proposée (hors périmètre) : plafond de 4096 et n plus grand pour l'ablation à dose 1,0 contre l'origine ; ou un jeu d'items qui provoque des boucles.
+## État des critères (rétro de l'epic 6)
+
+- E6-2 (contrôle croisé avec `slm-quality-bench`) : tenu. Les chiffres du bench sur la chirurgie sont relus et appariés (global et hors rag), et le désaccord d'ampleur avec la relance est écrit.
+- E6-1 (mesure qui discrimine) : partiel. À 2048 tokens, 78 % de l'origine sature encore ; une comparaison sur trois (ablation à 1,0) discrimine, sans correction de multiplicité.
+
+Suite proposée (hors périmètre) : plafond de 4096 tokens et n plus grand pour l'ablation à dose 1,0 et la chirurgie contre l'origine ; ou un jeu d'items qui provoque des boucles.

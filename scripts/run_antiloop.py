@@ -356,8 +356,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         from mood_steering.eval.datasets import load_global_mmlu_lite
 
         run_dir = RUNS_DIR / args.run_id
-        n = json.loads((run_dir / "config.json").read_text(encoding="utf-8"))["n"]
-        out = paired_report(run_dir, load_global_mmlu_lite(n=n))
+        config = json.loads((run_dir / "config.json").read_text(encoding="utf-8"))
+        items = load_global_mmlu_lite(n=config["n"])
+        if item_sources(items) != config["item_sources"]:
+            ap.error(
+                f"items relus de {item_sources(items)}, run mesuré sur {config['item_sources']}"
+            )
+        out = paired_report(run_dir, items)
         (run_dir / "paired.json").write_text(
             json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8"
         )
