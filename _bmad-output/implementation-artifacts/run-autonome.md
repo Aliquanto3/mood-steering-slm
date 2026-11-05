@@ -296,3 +296,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:16 · 5.2 · second-avis · lancé (Haiku) · 57c76af
 - 2026-11-05 05:18 · 5.2 · second-avis · 0 high, 4 medium (définition de la finesse, normalisation des pentes, appariement accidentel du bootstrap, seuil 10 %), 3 low · 57c76af
 - 2026-11-05 05:18 · 5.2 · review · lancée (Opus) · —
+- 2026-11-05 05:19 · 5.3 · review · passe 1 : 3 medium + 4 low corrigés (--short-run refusé avec modèles cœur, rapport H7 seul vers rapport-frugalite.md, latence appariée avec IC, lecture prudente) · a37bc3a
+- 2026-11-05 05:19 · 5.3 · review · passe 2 lancée (Opus) · —
