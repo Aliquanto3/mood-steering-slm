@@ -292,3 +292,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:11 · 5.2 · dev · lancé (Sonnet, worktree), analyse des données 3.5 sans génération, 7-9B hors périmètre · —
 - 2026-11-05 05:13 · 5.3 · second-avis · 0 high, 3 medium (--short-run écrit le verdict par défaut, H7 seul écrase rapport-verdict, rapport frugalité sur-interprété), 4 low · 05ce60c
 - 2026-11-05 05:13 · 5.3 · review · lancée (Opus) · —
+- 2026-11-05 05:16 · 5.2 · dev · fini : pente 4B > 2B et 0.8B au pôle positif (+0,29 [0,21 ; 0,37]), 4B plus stable à +1, 2B vs 0.8B indéterminé ; descriptif, 7-9B hors périmètre · 57c76af
+- 2026-11-05 05:16 · 5.2 · second-avis · lancé (Haiku) · 57c76af
