@@ -652,8 +652,8 @@ def render_report(
         f"- **Validité** d'une échelle : chaque bras dépasse le neutre de {DEGENERATE_MARGIN:.0%} "
         "de sorties dégénérées au plus (`is_coherent` du pic 1.4).",
         "- **Verdict** : tenue si les cosinus passent et si (a), (b) et la validité sont réunis "
-        "à au moins une échelle ; partielle si une partie seulement l'est ; non tenue si les cosinus "
-        "échouent ; sinon non concluante.",
+        "à au moins une échelle ; partielle si une partie seulement l'est ; non tenue si "
+        "les cosinus échouent ; sinon non concluante.",
         "",
         "## Cosinus entre calm_agitation et joy_sadness",
         "",
