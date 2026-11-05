@@ -21,7 +21,7 @@ Sans vecteur, la démo reste utilisable : voir « Repli sans vecteur ».
 ## Lancement
 
 ```
-uv run python -m mood_steering_demo \ --model models/gguf/Qwen3.5-4B-Q4_K_M.gguf --vector data/moods/Qwen3.5-4B-Q4_K_M/joy_sadness.gguf --max-scale 0.7 --il-start 8 --il-end 24
+uv run python -m mood_steering_demo --model models/gguf/Qwen3.5-4B-Q4_K_M.gguf --vector data/moods/Qwen3.5-4B-Q4_K_M/joy_sadness.gguf --max-scale 0.7 --il-start 8 --il-end 24
 ```
 
 La commande tient sur une seule ligne, valable sous PowerShell comme sous bash (les continuations de ligne diffèrent d'un shell à l'autre).
