@@ -217,3 +217,55 @@ def test_run_arms_ablator_wiring_and_summary_merge(tmp_path):
     )
     saved = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
     assert set(saved["arms"]) == {"origin", "ablation@1", "surgery"}
+
+
+def _rec(item_id, output):
+    return {
+        "item_id": item_id,
+        "arm": "origin",
+        "output": output,
+        "n_tokens": 3,
+        "truncated": False,
+        "max_new_tokens": 32,
+    }
+
+
+def test_run_arm_reprise_avec_separateurs_unicode(tmp_path):
+    items = _items(3)
+    arm = antiloop.Arm("origin", "origin")
+    path = tmp_path / "origin.jsonl"
+    first = [_rec("q0", "a b c"), _rec("q1", "x\u0085y")]
+    raw = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in first)
+    path.write_bytes(raw.encode("utf-8"))
+    assert antiloop.read_records(path) == first
+    calls: list[str] = []
+    recs = antiloop.run_arm(arm, items, _fake(calls), tmp_path, 32)
+    assert len(calls) == 1  # seul q2 est généré
+    assert recs[:2] == first
+    assert path.read_bytes().startswith(raw.encode("utf-8"))
+    assert antiloop.read_records(path) == recs
+
+
+def test_run_arm_reecriture_atomique_via_part(tmp_path, monkeypatch):
+    items = _items(2)
+    arm = antiloop.Arm("origin", "origin")
+    path = tmp_path / "origin.jsonl"
+    good = json.dumps(_rec("q0", "ok"), ensure_ascii=False) + "\n"
+    path.write_bytes(good.encode() + b'{"item_id": "q1", "ou')
+    before = path.read_bytes()
+
+    def boom(src, dst):
+        raise OSError("arrêt simulé")
+
+    monkeypatch.setattr(antiloop.os, "replace", boom)
+    with pytest.raises(OSError, match="arrêt simulé"):
+        antiloop.run_arm(arm, items, _fake([]), tmp_path, 32)
+    assert path.read_bytes() == before  # fichier d'origine intact
+    assert (tmp_path / "origin.jsonl.part").read_bytes() == good.encode()
+    monkeypatch.undo()
+    # Le .part résiduel est écrasé ; la ligne tronquée est écartée.
+    calls: list[str] = []
+    recs = antiloop.run_arm(arm, items, _fake(calls), tmp_path, 32)
+    assert len(calls) == 1 and [r["item_id"] for r in recs] == ["q0", "q1"]
+    assert len(path.read_text(encoding="utf-8").splitlines()) == 2
+    assert not (tmp_path / "origin.jsonl.part").exists()
