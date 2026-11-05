@@ -347,11 +347,26 @@ class TokenStream:
 class LlamaCppBackend:
     """Backend réel (extra ``llama``) ; seul endroit qui touche ``Llama._ctx.ctx``."""
 
-    def __init__(self, model_path: str, *, n_ctx: int = 2048) -> None:
+    def __init__(
+        self,
+        model_path: str,
+        *,
+        n_ctx: int = 2048,
+        n_gpu_layers: int = 0,
+        n_threads: int | None = None,
+    ) -> None:
+        """``n_gpu_layers`` : couches déchargées sur le GPU (0 = CPU seul, -1 = toutes ;
+        sans effet avec la roue CPU). ``n_threads`` : défaut de llama-cpp-python si ``None``."""
         import llama_cpp  # import paresseux : extra optionnel
 
         self._cpp = llama_cpp
-        self._llm = llama_cpp.Llama(model_path=model_path, n_ctx=n_ctx, verbose=False)
+        self._llm = llama_cpp.Llama(
+            model_path=model_path,
+            n_ctx=n_ctx,
+            n_gpu_layers=n_gpu_layers,
+            n_threads=n_threads,
+            verbose=False,
+        )
         self.n_embd = int(self._llm.n_embd())
         self.n_layer = int(llama_cpp.llama_model_n_layer(self._llm._model.model))
 

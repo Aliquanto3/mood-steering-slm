@@ -38,8 +38,10 @@ DEFAULT_SAMPLE_SIZE = 200
 DEFAULT_MAX_COST_USD = 1.0
 ENV_FILE_VAR = "MOOD_ENV_FILE"  # chemin explicite du fichier .env, prioritaire
 OVERHEAD_TOKENS = 120  # consigne système + gabarit de la requête
-OUTPUT_TOKENS = 25  # {"score": -0.35} avec marge
-MAX_TOKENS = 64
+# Sortie mesurée sur la campagne 3.5 : 47 tokens en moyenne (le juge commente avant le JSON),
+# et 56 réponses sur 200 coupées à 64 tokens. Plafond 128 : coût au pire sous 1 $ pour 200 items.
+OUTPUT_TOKENS = 60
+MAX_TOKENS = 128
 
 JUDGE_SYSTEM = (
     "Tu évalues le ton exprimé par un texte (expression d'humeur, pas un ressenti). "
@@ -204,7 +206,8 @@ def run_judge(
         try:
             scores[item.blind_id] = parse_judge_response(_response_text(response))
         except JudgeParseError as exc:
-            failures[item.blind_id] = str(exc)
+            truncated = getattr(response, "stop_reason", None) == "max_tokens"
+            failures[item.blind_id] = f"{exc} (coupée à max_tokens)" if truncated else str(exc)
     return JudgeResult(scores, failures)
 
 

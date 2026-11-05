@@ -116,8 +116,8 @@ def test_batch_sample_larger_than_records_keeps_all():
 
 def test_estimate_cost_exact():
     batch = judge.JudgeBatch((judge.JudgeItem("j1", "a" * 300),), {"j1": ("x", "1")})
-    # 100 + 120 tokens en entrée à 4 $/Mtok, 25 en sortie à 20 $/Mtok
-    assert judge.estimate_cost(batch) == pytest.approx((220 * 4 + 25 * 20) / 1e6)
+    # 100 + 120 tokens en entrée à 4 $/Mtok, 60 en sortie à 20 $/Mtok
+    assert judge.estimate_cost(batch) == pytest.approx((220 * 4 + 60 * 20) / 1e6)
     with pytest.raises(ValueError, match="prix inconnu"):
         judge.estimate_cost(batch, model="autre")
 
@@ -126,7 +126,10 @@ def test_default_sample_cost_under_cap():
     long = [{"arm": "a", "item_id": str(i), "output": "x" * 400} for i in range(300)]
     batch = judge.prepare_judge_batch(long, judge.DEFAULT_SAMPLE_SIZE, seed=0)
     cost = judge.estimate_cost(batch)
-    assert 0.25 < cost < 0.40 < judge.DEFAULT_MAX_COST_USD
+    assert 0.35 < cost < 0.60 < judge.DEFAULT_MAX_COST_USD
+    # au pire, toutes les réponses vont jusqu'au plafond de sortie : toujours sous 1 $
+    worst = cost + (judge.MAX_TOKENS - judge.OUTPUT_TOKENS) * len(batch.items) * 20 / 1e6
+    assert worst < judge.DEFAULT_MAX_COST_USD
 
 
 class FakeClient:
@@ -138,6 +141,26 @@ class FakeClient:
     def create(self, **kw):
         self.calls.append(kw)
         return SimpleNamespace(content=[SimpleNamespace(text=self.replies.pop(0))])
+
+
+def test_run_judge_marks_truncated_reply():
+    batch = judge.prepare_judge_batch(records()[:1], 1, seed=0)
+
+    class Cut:
+        messages = None
+
+        def __init__(self):
+            self.messages = self
+
+        def create(self, **kw):
+            assert kw["max_tokens"] == judge.MAX_TOKENS
+            text = SimpleNamespace(text="Le texte décrit un marché animé, le ton")
+            return SimpleNamespace(content=[text], stop_reason="max_tokens")
+
+    result = judge.run_judge(batch, Cut())
+    assert list(result.failures.values()) == [
+        "aucun JSON avec « score » dans la réponse (coupée à max_tokens)"
+    ]
 
 
 def test_run_judge_refuses_over_cap_without_calling():
