@@ -161,3 +161,77 @@ def test_chat_prompt():
     assert q in cs.chat_prompt("llama", q)
     with pytest.raises(ValueError, match="gemma3"):
         cs.chat_prompt("gemma3", q)
+
+
+def test_is_refusal_on_real_outputs():
+    # Sorties réelles du balayage (Qwen3.5-4B ×−0,3 et ×−0,7, Llama-3.2-3B ×0).
+    assert cs.is_refusal("Je ne possède pas de corps physique ni de conscience, donc je n'ai pas")
+    assert cs.is_refusal("Je ne peux pas écrire un message. Je suis une intelligence artificielle")
+    assert cs.is_refusal("En tant qu’IA, je n’ai pas de matinée personnelle à raconter.")
+    assert cs.is_refusal("Je ne peux pas fournir de détails sur les transports")
+    # Ton triste sans refus de la tâche : gardé.
+    assert not cs.is_refusal("Je ne peux pas oublier ce matin gris, le train était vide.")
+    assert not cs.is_refusal("Le silence de la chambre m'a empêché de dormir.")
+    # Phrase du message de report (4B ×−0,5), loin du début : le jeu de rôle continue.
+    late = "Voici un modèle de message. " + "Bonjour, " * 20 + "je ne peux pas fournir les notes."
+    assert not cs.is_refusal(late)
+
+
+def test_aggregate_excludes_errors_and_refusals():
+    ok = {"layers": "mid", "dose": -0.3, "coherent": True, "french": True}
+    rows = [
+        {**ok, "text": "Un matin long et morne.", "tone": -0.5},
+        {**ok, "text": "Je suis une intelligence artificielle.", "tone": -0.9},
+        {**ok, "text": "", "tone": 0.0, "coherent": False, "error": "llama_decode returned 1"},
+    ]
+    [s] = cs.aggregate(rows)["mid"]
+    # Erreur hors du compte ; refus compté non cohérent et hors de la moyenne du ton.
+    assert (s.n, s.errors, s.refusals) == (2, 1, 1)
+    assert s.tone == pytest.approx(-0.5)
+    assert s.coherent == pytest.approx(0.5)
+
+
+def test_aggregate_all_refused_is_not_useful():
+    row = {"layers": "mid", "coherent": True, "french": True, "text": "En tant qu'IA, non."}
+    rows = [{**row, "dose": 0.0, "tone": 0.0}, {**row, "dose": -0.3, "tone": -0.9}]
+    stats = cs.aggregate(rows)["mid"]
+    assert cs.useful_range(stats, -1) is None
+
+
+def test_useful_range_shift_at_threshold():
+    # 0,42 − 0,17 vaut 0,2499999… en flottant : l'écart au seuil exact compte.
+    stats = _stats([(0.0, 0.17, 1.0), (0.2, 0.42, 1.0), (0.3, 0.6, 1.0)])
+    assert cs.useful_range(stats, 1) == (0.2, 0.3)
+
+
+def test_decide_max_scale_is_lowest_upper_bound():
+    stats = _stats(
+        [(0.0, 0.0, 1.0), (0.2, 0.3, 1.0), (0.4, 0.5, 1.0), (0.7, 0.6, 1.0)]
+        + [(-0.2, -0.3, 1.0), (-0.3, -0.4, 1.0), (-0.5, -0.5, 1.0), (-0.7, -0.5, 0.0)]
+    )
+    d = cs.decide({"mid": stats})
+    assert (d.joy, d.sadness, d.max_scale) == ((0.2, 0.7), (0.2, 0.5), 0.5)
+
+
+def test_decide_without_ratio_gives_no_max_scale():
+    stats = _stats([(0.0, 0.0, 1.0), (0.2, 0.5, 1.0), (0.3, 0.5, 1.0), (-0.3, -0.5, 1.0)])
+    d = cs.decide({"mid": stats})
+    assert d.joy == (0.2, 0.3) and d.sadness == (0.3, 0.3)
+    assert d.max_scale is None
+
+
+def test_generate_vector_goes_through_calibrate(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        out = cmd[cmd.index("-o") + 1]
+        Path(out).write_bytes(b"")  # sortie illisible : calibrate doit la refuser
+
+    monkeypatch.setattr(cs.subprocess, "run", fake_run)
+    monkeypatch.setenv("MOOD_CVECTOR_GENERATOR", "gen.exe")
+    with pytest.raises(RuntimeError, match="illisible"):
+        cs.generate_vector(str(tmp_path / "M.gguf"), threads=3, root=str(tmp_path / "moods"))
+    [cmd] = calls
+    assert cmd[0] == "gen.exe" and cmd[-2:] == ["-t", "3"]
+    assert "--method" in cmd and not (tmp_path / "moods" / "M" / "joy_sadness.gguf").exists()

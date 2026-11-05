@@ -1,4 +1,4 @@
-{"positive": "Je suis ravi, tout se passe merveilleusement bien aujourd'hui !", "negative": "Je suis abattu, plus rien ne va depuis ce matin."}
+{"positive": "Tout se passe merveilleusement bien aujourd'hui, quelle belle journée !", "negative": "Plus rien ne va depuis ce matin, quelle journée accablante."}
 {"positive": "Quelle belle journée, le soleil brille et je souris.", "negative": "Quelle journée grise, la pluie tombe et je soupire."}
 {"positive": "J'ai reçu une excellente nouvelle, c'est formidable !", "negative": "J'ai reçu une mauvaise nouvelle, c'est désolant."}
 {"positive": "Nous avons gagné, tout le monde rit et applaudit.", "negative": "Nous avons perdu, tout le monde se tait et baisse les yeux."}
@@ -14,7 +14,7 @@
 {"positive": "C'est le plus beau jour de ma vie !", "negative": "C'est le jour le plus sombre de ma vie."}
 {"positive": "J'ai réussi l'examen, je suis fou de joie !", "negative": "J'ai raté l'examen, je suis effondré."}
 {"positive": "La maison résonne de musique et de rires.", "negative": "La maison est vide et silencieuse, plus personne n'y rit."}
-{"positive": "Je me sens plein d'énergie et d'espoir.", "negative": "Je me sens vidé, sans le moindre espoir."}
+{"positive": "Une journée pleine d'énergie et d'espoir commence.", "negative": "Une journée vide, sans le moindre espoir, commence."}
 {"positive": "Le repas de famille était chaleureux et gai.", "negative": "Le repas de famille était morne et triste."}
 {"positive": "Il a ouvert son cadeau en poussant un cri de joie.", "negative": "Il a regardé la chaise vide en retenant un sanglot."}
 {"positive": "Tout me paraît possible ce matin, la vie est belle.", "negative": "Rien ne me paraît possible ce matin, la vie est pesante."}
@@ -25,7 +25,7 @@
 {"positive": "Le ciel bleu me met de bonne humeur.", "negative": "Le ciel gris me plonge dans la mélancolie."}
 {"positive": "Quelle chance, tout s'arrange enfin !", "negative": "Quel malheur, tout s'effondre encore."}
 {"positive": "Ma grand-mère rayonne de bonheur à la fête.", "negative": "Ma grand-mère s'assombrit de chagrin à l'enterrement."}
-{"positive": "J'ai hâte de partir en vacances, je suis aux anges.", "negative": "Je n'ai envie de rien, je me sens au fond du trou."}
+{"positive": "Les vacances approchent, quel bonheur de partir enfin !", "negative": "Les vacances approchent et rien ne fait envie, tout paraît au fond du trou."}
 {"positive": "Les retrouvailles sur le quai étaient pleines de joie.", "negative": "Les adieux sur le quai étaient pleins de larmes."}
 {"positive": "Je savoure chaque instant de cette merveilleuse soirée.", "negative": "Je subis chaque minute de cette interminable soirée."}
 {"positive": "Le bébé gazouille et toute la famille s'émerveille.", "negative": "Le bébé pleure et toute la famille s'inquiète en silence."}
@@ -57,7 +57,7 @@
 {"positive": "Je suis optimiste, demain sera encore meilleur.", "negative": "Je suis pessimiste, demain sera encore pire."}
 {"positive": "Le village entier célèbre la victoire avec allégresse.", "negative": "Le village entier pleure la disparition de son doyen."}
 {"positive": "J'ai retrouvé mon vieux carnet, et ces souvenirs me font sourire.", "negative": "J'ai retrouvé mon vieux carnet, et ces souvenirs me font pleurer."}
-{"positive": "La neige tombe et les enfants crient de joie.", "negative": "La neige tombe et je me sens terriblement seul."}
+{"positive": "La neige tombe et les enfants crient de joie.", "negative": "La neige tombe sur une rue déserte, d'une tristesse silencieuse."}
 {"positive": "Notre équipe a remporté la coupe, c'est l'euphorie !", "negative": "Notre équipe a été éliminée, c'est la consternation."}
 {"positive": "Je trouve la vie pleine de couleurs et de promesses.", "negative": "Je trouve la vie terne et sans promesse."}
 {"positive": "Son message m'a réchauffé le cœur.", "negative": "Son silence m'a glacé le cœur."}
@@ -75,7 +75,7 @@
 {"positive": "J'adore cette saison, tout me rend joyeux.", "negative": "Je déteste cette saison, tout me rend triste."}
 {"positive": "Nous trinquons à l'avenir avec bonheur.", "negative": "Nous pensons au passé avec regret."}
 {"positive": "Le spectacle était merveilleux, les enfants étaient émerveillés.", "negative": "Le spectacle était annulé, les enfants étaient inconsolables."}
-{"positive": "Je me sens léger comme une plume, libre et heureux.", "negative": "Je me sens lourd comme une pierre, seul et malheureux."}
+{"positive": "La journée est légère comme une plume, libre et heureuse.", "negative": "La journée est lourde comme une pierre, morne et sans issue."}
 {"positive": "Les nouvelles du jour sont réjouissantes.", "negative": "Les nouvelles du jour sont accablantes."}
 {"positive": "Elle chante sous la douche, de joyeuse humeur.", "negative": "Elle pleure sous la douche, d'humeur sombre."}
 {"positive": "Ce cadeau m'a fait un plaisir immense.", "negative": "Cette absence m'a fait une peine immense."}
@@ -92,7 +92,7 @@
 {"positive": "Je déborde d'enthousiasme à l'idée de ce voyage.", "negative": "Je n'ai plus aucun élan à l'idée de ce voyage."}
 {"positive": "Une bonne nouvelle a égayé toute la journée.", "negative": "Une mauvaise nouvelle a assombri toute la journée."}
 {"positive": "Le gâteau d'anniversaire a fait le bonheur de tous.", "negative": "L'anniversaire oublié a laissé un goût amer."}
-{"positive": "Je me sens chanceux et reconnaissant.", "negative": "Je me sens malchanceux et abandonné."}
+{"positive": "Quelle chance, tout tourne en notre faveur !", "negative": "Quelle malchance, tout tourne au gris et à l'abandon."}
 {"positive": "Les vagues scintillent et je ris de plaisir.", "negative": "Les vagues grondent et je pleure de solitude."}
 {"positive": "C'est une victoire magnifique, je suis transporté de joie !", "negative": "C'est une défaite cruelle, je suis accablé de tristesse."}
 {"positive": "Ce soir, tout me sourit.", "negative": "Ce soir, tout me pèse."}

@@ -1,26 +1,26 @@
 """Pic 1.4 : calibration joie / tristesse, choix des modèles.
 
 Sous-commandes :
-  vector MODELE SORTIE [--method mean|pca]   vecteur par llama-cvector-generator (paires du JSONL)
+  vector MODELE [--method mean|pca]          vecteur par `mood_steering.calibration.calibrate`
   scan MODELE VECTEUR SORTIE.jsonl           balayage couches x doses x prompts (binding, CPU)
-  summary SORTIE.jsonl                       table par couches et dose, plage utile, critères
+  rescore SORTIE.jsonl NOTEE.jsonl            ajoute le score du classifieur (`tone_clf`)
+  summary SORTIE.jsonl [--score tone_clf]    table par couches et dose, plage utile, décision
   speed MODELE VECTEUR [--streams 3]          tokens/s CPU de flux entrelacés (GPU désactivé)
 
-La logique pure (paires, score de ton, cohérence, plage utile) n'a besoin que de la bibliothèque
-standard ; `scan` demande l'extra `llama` et `vector` le binaire LLAMA_CVECTOR_GENERATOR.
-Le score de ton est une heuristique lexicale : il mesure l'expression d'une humeur dans le texte,
-jamais un ressenti du modèle.
+La logique pure (paires, score lexical, cohérence, refus, plage utile, décision) n'a besoin que
+de la bibliothèque standard ; `scan` et `speed` demandent l'extra `llama`, `rescore` l'extra
+`eval`, `vector` le binaire désigné par MOOD_CVECTOR_GENERATOR. Les scores mesurent
+l'expression d'une humeur dans le texte, jamais un ressenti du modèle.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
+import math
 import re
 import subprocess
 import sys
-import tempfile
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -54,6 +54,16 @@ def chat_prompt(arch: str, question: str) -> str:
         raise ValueError(f"architecture sans gabarit : {arch!r}")
     return CHAT_TEMPLATES[arch].format(q=question)
 
+
+# Prompts tenus à l'écart du choix des plages : validation des plages retenues (4B).
+HOLDOUT_PROMPTS = [
+    "Résume en trois phrases ce que tu as fait le week-end dernier.",
+    "Écris un mot pour prévenir tes voisins de travaux chez toi la semaine prochaine.",
+    "Décris la vue depuis la fenêtre d'un bureau un mardi après-midi.",
+    "Raconte en quelques phrases un trajet en bus pour aller au travail.",
+    "Écris un court message pour inviter des amis à dîner samedi.",
+]
+PROMPT_SETS = {"select": PROMPTS, "holdout": HOLDOUT_PROMPTS}
 
 N_CTX = 512
 SEED = 42
@@ -99,9 +109,33 @@ _FR = set("le la les de des du et je il elle est un une que qui dans pour pas en
           "avec sur me ma mon nous sont était a ai été très".split())  # fmt: skip
 _EN = set("the and is a to of in it i was my that for with but this we are have".split())
 
+# Refus ou mise au point d'assistant (la tâche de jeu de rôle n'est pas faite) : ces sorties
+# sont exclues de la plage utile, quel que soit leur ton (un refus a souvent un ton « triste »).
+# Motifs cherchés en minuscules, apostrophes typographiques ramenées à « ' », dans le début de
+# la réponse seulement : plus loin, « je ne peux pas fournir… » est une phrase du jeu de rôle.
+REFUSAL_WINDOW = 160  # caractères
+REFUSAL_PATTERNS = [
+    r"en tant qu'(?:ia|intelligence artificielle|assistant|modèle)",
+    r"je suis une? (?:ia|intelligence artificielle|assistant\w*|modèle de langage|programme)",
+    r"je ne (?:peux|suis) pas (?:en mesure|capable) de (?:ressentir|vivre|avoir)",
+    r"je ne peux pas (?:écrire|fournir|raconter|répondre|décrire|vous aider|t'aider|faire|"
+    r"donner|rédiger|ressentir|vivre)",
+    r"je n'ai pas (?:de |d')?(?:corps|conscience|émotions?|sentiments?|matinée|expérience|"
+    r"vie personnelle|souvenirs?)",
+    r"je ne (?:possède|ressens) pas",
+    r"je ne suis pas (?:un être (?:vivant|humain)|humaine?)",
+    r"(?:pas|ni) de corps physique",
+    r"as an ai", r"i'm an ai", r"i am an ai",
+    r"i (?:can't|cannot|am unable to) (?:write|provide|help)",
+    r"i don't have (?:a body|feelings|emotions|personal)",
+]  # fmt: skip
+_REFUSAL_RE = re.compile("|".join(REFUSAL_PATTERNS))
+
 # Seuils de la plage utile (consignés dans docs/pics/choix-des-modeles.md).
 MIN_SHIFT = 0.25  # écart de ton minimal avec la dose 0
-MIN_COHERENT = 2 / 3  # part minimale de sorties cohérentes et en français
+MIN_COHERENT = 2 / 3  # part minimale de sorties cohérentes, en français et sans refus
+EPS = 1e-9  # tolérance flottante aux seuils (0,42 − 0,17 vaut 0,2499999… en flottant)
+DECISION_LAYERS = "mid"  # plage de couches retenue pour tous les modèles
 
 
 def load_pairs(path: str | Path = PAIRS_PATH) -> list[tuple[str, str]]:
@@ -133,6 +167,11 @@ def tone_score(text: str) -> float:
     j = len(_JOY_RE.findall(low)) + sum(c in JOY_EMOJI for c in text)
     s = len(_SAD_RE.findall(low)) + sum(c in SAD_EMOJI for c in text)
     return (j - s) / (j + s + 1)
+
+
+def is_refusal(text: str) -> bool:
+    """Refus de la tâche ou mise au point d'assistant (motifs `REFUSAL_PATTERNS`)."""
+    return bool(_REFUSAL_RE.search(text[:REFUSAL_WINDOW].lower().replace("’", "'")))
 
 
 def is_french(text: str) -> bool:
@@ -167,21 +206,32 @@ def layer_range(n_layer: int, frac: tuple[float, float]) -> tuple[int, int]:
 @dataclass(frozen=True)
 class DoseStat:
     dose: float
-    tone: float  # moyenne sur les prompts
-    coherent: float  # part cohérente et en français
-    n: int
+    tone: float  # moyenne sur les prompts hors refus (nan si tous refusés)
+    coherent: float  # part cohérente, en français et sans refus
+    n: int  # sorties sans erreur
+    errors: int = 0  # échecs de génération, hors moyenne et hors part cohérente
+    refusals: int = 0
 
 
-def aggregate(rows: list[dict]) -> dict[str, list[DoseStat]]:
-    """Regroupe les sorties par plage de couches puis par dose, doses triées."""
+def aggregate(rows: list[dict], score: str = "tone") -> dict[str, list[DoseStat]]:
+    """Regroupe les sorties par plage de couches puis par dose, doses triées.
+
+    `score` : clé du ton (`tone` lexical, `tone_clf` classifieur). Une sortie en erreur est
+    comptée à part ; un refus compte comme non cohérent et sort de la moyenne du ton.
+    """
     groups: dict[tuple[str, float], list[dict]] = defaultdict(list)
     for r in rows:
         groups[(r["layers"], float(r["dose"]))].append(r)
     out: dict[str, list[DoseStat]] = defaultdict(list)
     for (layers, dose), rs in sorted(groups.items()):
-        tone = sum(r["tone"] for r in rs) / len(rs)
-        coh = sum(bool(r["coherent"] and r["french"]) for r in rs) / len(rs)
-        out[layers].append(DoseStat(dose, tone, coh, len(rs)))
+        ok = [r for r in rs if not r.get("error")]
+        errors = len(rs) - len(ok)
+        refused = [r for r in ok if is_refusal(r.get("text", ""))]
+        kept = [r for r in ok if not is_refusal(r.get("text", ""))]
+        tone = sum(r[score] for r in kept) / len(kept) if kept else math.nan
+        good = sum(bool(r["coherent"] and r["french"]) for r in kept)
+        coh = good / len(ok) if ok else 0.0
+        out[layers].append(DoseStat(dose, tone, coh, len(ok), errors, len(refused)))
     return dict(out)
 
 
@@ -194,12 +244,12 @@ def useful_range(
     MIN_COHERENT et si son ton s'écarte de la base d'au moins `min_shift` dans le sens du signe.
     Rend (dose la plus faible, dose la plus forte) en valeur absolue, ou None.
     """
-    base = next((s.tone for s in stats if s.dose == 0), 0.0)
+    base = next((s.tone for s in stats if s.dose == 0 and not math.isnan(s.tone)), 0.0)
     side = sorted((s for s in stats if s.dose * sign > 0), key=lambda s: abs(s.dose))
     best: list[DoseStat] = []
     run: list[DoseStat] = []
     for s in side:
-        if s.coherent >= MIN_COHERENT and (s.tone - base) * sign >= min_shift:
+        if s.coherent >= MIN_COHERENT - EPS and (s.tone - base) * sign >= min_shift - EPS:
             run.append(s)
             if (len(run), _ratio(run)) > (len(best), _ratio(best)):
                 best = list(run)
@@ -217,27 +267,47 @@ def _ratio(run: list[DoseStat]) -> float:
 def meets_ratio(rng: tuple[float, float] | None, factor: float = 1.5) -> bool:
     """Critère de l'epic : dose max >= 1,5 x dose min."""
     # Tolérance : 1,5 x 0,1 vaut 0,15000000000000002 en flottant.
-    return rng is not None and rng[1] >= factor * rng[0] - 1e-9
+    return rng is not None and rng[1] >= factor * rng[0] - EPS
+
+
+@dataclass(frozen=True)
+class Decision:
+    layers: str
+    joy: tuple[float, float] | None
+    sadness: tuple[float, float] | None
+    max_scale: float | None  # None si un pôle manque ou ne passe pas le critère 1,5 x
+
+
+def decide(agg: dict[str, list[DoseStat]], layers: str = DECISION_LAYERS) -> Decision:
+    """Règle écrite de la note : plages utiles sur `layers` ; `max_scale` = plus petite des deux
+    bornes hautes (la plus forte dose où les deux pôles restent utiles), à condition que les deux
+    pôles passent le critère max >= 1,5 x min."""
+    stats = agg.get(layers, [])
+    joy, sad = useful_range(stats, 1), useful_range(stats, -1)
+    ok = meets_ratio(joy) and meets_ratio(sad)
+    return Decision(layers, joy, sad, min(joy[1], sad[1]) if ok else None)
 
 
 # --- génération du vecteur -----------------------------------------------------------------
 
 
-def generate_vector(model: str, out: str, method: str = "mean", threads: int = 6) -> None:
-    exe = os.environ.get("LLAMA_CVECTOR_GENERATOR")
-    if not exe:
-        sys.exit("définir LLAMA_CVECTOR_GENERATOR")
-    pairs = load_pairs()
-    Path(out).parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        pos, neg = Path(tmp, "pos.txt"), Path(tmp, "neg.txt")
-        pos.write_text("\n".join(p for p, _ in pairs) + "\n", encoding="utf-8")
-        neg.write_text("\n".join(n for _, n in pairs) + "\n", encoding="utf-8")
-        cmd = [
-            exe, "-m", model, "--positive-file", str(pos), "--negative-file", str(neg),
-            "-o", out, "-ngl", "0", "-t", str(threads), "--method", method,
-        ]  # fmt: skip
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
+def generate_vector(
+    model: str, method: str = "mean", threads: int = 6, root: str = "data/moods"
+) -> Path:
+    """Vecteur `{root}/{model_id}/joy_sadness.gguf` par `calibrate` (force=True) : même
+    échappement des invites et même variable MOOD_CVECTOR_GENERATOR que la bibliothèque ; seul
+    le nombre de threads est ajouté à la ligne de commande."""
+    from mood_steering.calibration import calibrate
+
+    load_pairs()  # contrôle du format (doublons, clés) avant de lancer le générateur
+
+    def run(cmd: list[str]) -> None:
+        subprocess.run([*cmd, "-t", str(threads)], check=True, stdout=subprocess.DEVNULL)
+
+    return calibrate(
+        model, Path(model).stem, pairs_path=PAIRS_PATH, force=True, method=method,
+        generator=run, root=Path(root),
+    )  # fmt: skip
 
 
 # --- balayage -------------------------------------------------------------------------------
@@ -281,6 +351,7 @@ def scan(
     layers: list[str],
     n_predict: int = 60,
     threads: int = 6,
+    prompts: list[str] = PROMPTS,
 ) -> None:
     """Une génération gloutonne par (couches, dose, prompt), `reset()` avant chacune.
 
@@ -309,7 +380,7 @@ def scan(
         for name in layers:
             il_start, il_end = layer_range(n_layer, LAYER_FRACTIONS[name])
             for dose in doses:
-                for ip, prompt in enumerate(PROMPTS):
+                for ip, prompt in enumerate(prompts):
                     if (name, float(dose), ip) in done:
                         continue
                     if dose == 0:
@@ -359,8 +430,9 @@ def speed(
 ) -> dict:
     """Vitesse CPU de `streams` flux entrelacés token par token (GPU désactivé).
 
-    Un contexte par flux (poids partagés par mmap), le dernier sous vecteur : c'est le schéma de
-    la démo trois colonnes, où chaque colonne a sa dose et donc son propre contexte.
+    Une instance `Llama` par flux (donc un chargement du modèle par flux : le partage des pages
+    mmap n'est pas vérifié, et le réarrangement CPU des poids peut en faire des copies), le dernier
+    sous vecteur. La démo trois colonnes peut faire mieux : un seul modèle et trois contextes.
     """
     import ctypes
 
@@ -410,17 +482,50 @@ def speed(
     return res
 
 
-def summary(path: str) -> None:
+def rescore(path: str, out: str, batch_size: int = 16) -> None:
+    """Ajoute `tone_clf` (P(joie) − P(tristesse) de `mood_steering.eval.tone`, révision
+    épinglée) et `refusal` à chaque sortie, sans régénérer ; `tone` (lexical) reste pour
+    comparaison. Extra `eval`."""
+    from mood_steering.eval.tone import (
+        EMOTION_MODEL,
+        EMOTION_REVISION,
+        ToneScorer,
+        load_hf_classifier,
+    )
+
     rows = [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x]
-    for layers, stats in aggregate(rows).items():
+    scorer = ToneScorer(
+        load_hf_classifier(EMOTION_MODEL, revision=EMOTION_REVISION, batch_size=batch_size)
+    )
+    todo = [r for r in rows if not r.get("error")]
+    for r, v in zip(todo, scorer.score([r["text"] for r in todo]), strict=True):
+        r["tone_clf"] = round(v, 4)
+    for r in rows:
+        r.setdefault("tone_clf", None)
+        r["refusal"] = is_refusal(r.get("text", ""))
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    body = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
+    Path(out).write_text(body, encoding="utf-8", newline="\n")
+
+
+def summary(path: str, score: str = "tone") -> Decision:
+    """Table par couches et dose, plages utiles, puis décision par la règle écrite (`decide`)."""
+    rows = [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x]
+    agg = aggregate(rows, score)
+    for layers, stats in agg.items():
         il = next(r["il"] for r in rows if r["layers"] == layers)
-        print(f"\n== {rows[0]['model']} couches {layers} {il[0]}-{il[1]}")
-        print("dose\tton\tcohérent")
+        print(f"\n== {rows[0]['model']} couches {layers} {il[0]}-{il[1]} (score {score})")
+        print("dose\tton\tcohérent\tn\terreurs\trefus")
         for s in stats:
-            print(f"{s.dose:+.3f}\t{s.tone:+.2f}\t{s.coherent:.2f}\t(n={s.n})")
+            print(
+                f"{s.dose:+.3f}\t{s.tone:+.2f}\t{s.coherent:.2f}\t{s.n}\t{s.errors}\t{s.refusals}"
+            )
         for sign, label in [(1, "joie"), (-1, "tristesse")]:
             rng = useful_range(stats, sign)
             print(f"plage utile {label} : {rng} ; max >= 1,5 x min : {meets_ratio(rng)}")
+    d = decide(agg)
+    print(f"\nDÉCISION ({d.layers}) : joie {d.joy}, tristesse {d.sadness}, max_scale {d.max_scale}")
+    return d
 
 
 def _floats(s: str) -> list[float]:
@@ -432,7 +537,7 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     v = sub.add_parser("vector")
     v.add_argument("model")
-    v.add_argument("out")
+    v.add_argument("--root", default="data/moods")
     v.add_argument("--method", choices=["mean", "pca"], default="mean")
     v.add_argument("--threads", type=int, default=6)
     s = sub.add_parser("scan")
@@ -443,7 +548,13 @@ def main() -> None:
     s.add_argument("--layers", default="all,mid,high")
     s.add_argument("--tokens", type=int, default=60)
     s.add_argument("--threads", type=int, default=6)
-    sub.add_parser("summary").add_argument("path")
+    s.add_argument("--prompts", choices=sorted(PROMPT_SETS), default="select")
+    r = sub.add_parser("rescore")
+    r.add_argument("path")
+    r.add_argument("out")
+    m = sub.add_parser("summary")
+    m.add_argument("path")
+    m.add_argument("--score", choices=["tone", "tone_clf"], default="tone")
     b = sub.add_parser("speed")
     b.add_argument("model")
     b.add_argument("vector")
@@ -455,13 +566,18 @@ def main() -> None:
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # console Windows en cp1252
     if a.cmd == "vector":
-        generate_vector(a.model, a.out, a.method, a.threads)
+        print(generate_vector(a.model, a.method, a.threads, a.root))
     elif a.cmd == "scan":
-        scan(a.model, a.vector, a.out, a.doses, a.layers.split(","), a.tokens, a.threads)
+        scan(
+            a.model, a.vector, a.out, a.doses, a.layers.split(","), a.tokens, a.threads,
+            PROMPT_SETS[a.prompts],
+        )  # fmt: skip
+    elif a.cmd == "rescore":
+        rescore(a.path, a.out)
     elif a.cmd == "speed":
         speed(a.model, a.vector, a.streams, a.threads, a.tokens, a.dose, a.layers)
     else:
-        summary(a.path)
+        summary(a.path, a.score)
 
 
 if __name__ == "__main__":
