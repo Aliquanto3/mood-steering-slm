@@ -234,7 +234,7 @@ def frugality_section(summary: FrugalitySummary) -> str:
     lines = [
         "Latence par génération (moyenne, IC95 bootstrap), énergie et CO2 par bras.",
         "",
-        "| Bras | n | Latence (s) | Latence/mot (approx. tokens) (s) | Énergie (kWh) | CO2 (kg) "
+        "| Bras | n | Latence (s) | Latence par mot (s/mot) | Énergie (kWh) | CO2 (kg) "
         "| Énergie/gén. (kWh) | CO2/gén. (kg) |",
         "|---|---|---|---|---|---|---|---|",
     ]
