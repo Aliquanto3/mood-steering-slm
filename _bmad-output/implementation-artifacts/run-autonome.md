@@ -364,3 +364,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 21:13 · A5 · review · passe 2 (Sonnet) : 0 Important · 5f1bdd1
 - 2026-11-05 21:13 · A5 · CI · verte (6 jobs) · 5f1bdd1
 - 2026-11-05 21:13 · A5 · fusion · #30 fusionnée, MERGED vérifié · b3bf8ef
+- 2026-11-05 22:15 · A2 · mesure · bras origine fini : 78 % tronquées (39/50) ; ordre du script : ablation 0,5, ablation 1,0, chirurgie · —
+- 2026-11-05 22:15 · run · décision · Anaël laisse le GPU à l'orchestrateur pour la nuit, autonomie sur tout ce qui est faisable · —
+- 2026-11-05 22:15 · A4 · dev · lancé (Sonnet, worktree) : --energy-repeats et ordre alterné, cadrage story-a4-energie-repetee.md ; pas de verdict H7 tant que A6 n'est pas décidé · —
