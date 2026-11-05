@@ -194,3 +194,7 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:41 · 4.1 · review · passe 1 : 1 high, 3 medium, 4 low corrigés (409, annulation, bornes, JSON ASCII, httpx2 en dev) · dd3cbe8
 - 2026-11-05 01:41 · 4.1 · PR · #12 ouverte · dd3cbe8
 - 2026-11-05 01:41 · 4.1 · review · passe 2 lancée (verrou, threads, stabilité des tests, légitimité de httpx2) · —
+- 2026-11-05 01:45 · 4.1 · review · passe 2 : aucun Important, test 409 rendu déterministe, httpx2 vérifié (pydantic) · 5ceaa0b
+- 2026-11-05 01:45 · 4.1 · CI · verte sur les trois OS · 5ceaa0b
+- 2026-11-05 01:45 · 4.1 · fusion · #12 fusionnée, MERGED vérifié · 494f3bb
+- 2026-11-05 01:45 · 4.2 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD) · —
