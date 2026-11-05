@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -179,7 +180,7 @@ def test_h1_pole_negatif_non_significatif() -> None:
 
 
 def test_choix_du_test_pole_negatif_sans_faux_positif() -> None:
-    choice = choose_negative_test()
+    choice = choose_negative_test(seed=0)  # même clé de cache que judge_all
     assert choice.n_reps >= 200
     assert choice.false_positive_rate[choice.test] <= 0.05
     # le bootstrap apparié détecte mieux mais dépasse 5 % de faux positifs sur des bras de même loi
@@ -189,7 +190,7 @@ def test_choix_du_test_pole_negatif_sans_faux_positif() -> None:
     assert "écarté : bootstrap_diff" in choice.reason
     # l'appariement gagne en détection sur des items corrélés
     assert choice.detection_rate[TEST_BOOTSTRAP] > choice.detection_rate[TEST_BOOTSTRAP_INDEP]
-    assert choice == choose_negative_test()  # déterministe
+    assert choice is choose_negative_test(seed=0)  # calculé une fois (cache)
 
 
 def test_choix_retient_le_bootstrap_si_le_seuil_le_permet() -> None:
@@ -548,3 +549,13 @@ def test_rapport_utilise_le_choix_fourni(tmp_path: Path) -> None:
     assert "`ic_non_overlap` (raison fixée)" in text
     assert "11 items par bras communs aux bras" in text and "7 répétitions" in text
     assert "| `bootstrap_diff` | 0.900 | 0.000 |" in text
+
+
+def test_verdict_oui_mais_si_complaisance_non_mesuree() -> None:
+    m = bench()
+    m = BenchMeasures(tuple(dataclasses.replace(a, sycophancy=None) for a in m.arms))
+    j = judge_all(m, n_boot=N_BOOT)
+    assert j.h1.held and j.h4.answer == "oui" and not j.h3.alert
+    assert j.h3.underpowered
+    assert "non mesurée" in (j.h3.power_note or "")
+    assert j.verdict.label == "oui, mais"
