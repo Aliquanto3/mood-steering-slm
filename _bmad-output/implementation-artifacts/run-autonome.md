@@ -334,3 +334,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 07:45 · 6.2 · CI · verte (6 jobs) · 544bea7
 - 2026-11-05 07:45 · 6.2 · fusion · #24 fusionnée, MERGED vérifié · 5139f48
 - 2026-11-05 07:45 · 6.2 · report · relance à plafond 2048/4096 sur n réduit ; contrôle croisé slm-quality-bench · —
+- 2026-11-05 07:50 · 5.4 · review · passe 1 : 3 medium et 4 low corrigés, 2 low écartés ; verdict H5 requalifié « non concluante » ; option --report-only ; rapport recalculé sans génération · 37a33c1
+- 2026-11-05 07:50 · 5.4 · review · passe 2 lancée (Sonnet) · —
+- 2026-11-05 07:50 · 5.4 · report · paires à valence équilibrée puis régénération ; calibration max_scale du calme et échelles 0,3/0,5 sur GPU ; proxy d'activation validé · —
