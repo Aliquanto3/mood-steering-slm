@@ -235,3 +235,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:11 · 2.3 · CI · verte sur les trois OS · 345927e
 - 2026-11-05 02:11 · 2.3 · fusion · #15 fusionnée, MERGED vérifié ; Epic 2 terminé · d3b58f5
 - 2026-11-05 02:11 · 3.5 · dev · lancé (dev-story Opus, pivot, worktree ; campagne réelle sur la tour, juge Opus 5.5 réel ≤ 1 $) · —
+- 2026-11-05 02:12 · 6.1 · review · passe 1 : 4 medium et 1 low corrigés, job CI extras ajouté, directions exportées dans data/directions/ (couches 15 et 19) · f182159
+- 2026-11-05 02:12 · 6.1 · PR · #16 ouverte (main fusionné) · d2b90b7
+- 2026-11-05 02:12 · 6.1 · review · passe 2 lancée (Sonnet, story bonus mécanique) · —
