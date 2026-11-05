@@ -18,6 +18,7 @@ let lastStopAt = 0;
 let curvePending = false;
 let steeringTokens = 0;
 let doseHistory = [];
+let pulseActive = false; // le flux porte la dose appliquée à chaque token (profil impulsion)
 
 function formatDose(v) {
   return Number(v).toFixed(2).replace(".", ",");
@@ -37,8 +38,8 @@ function setRunning(running) {
 /**
  * Trace la courbe de dose dans le SVG #dose-curve.
  * @param {Array<{x:number, dose:number}>} points un point par token (x = rang du token, à partir
- *   de 0 ; dose dans [-1, 1]). Pour l'instant la dose est constante ; un profil token par token
- *   (story 2.3) pourra être passé tel quel. Une liste vide efface la courbe (axes et repère 0
+ *   de 0 ; dose dans [-1, 1]). Profil constant : la dose du curseur ; profil impulsion : la dose
+ *   réellement appliquée à chaque token, lue dans le flux (story 5.1). Une liste vide efface la courbe (axes et repère 0
  *   restent affichés).
  */
 function drawDoseCurve(points) {
@@ -95,6 +96,7 @@ function resetColumns() {
   steeringTokens = 0;
   doseHistory = [];
   fallbackActive = false;
+  pulseActive = false;
   drawDoseCurve([]);
 }
 
@@ -114,6 +116,7 @@ function handleEvent(ev) {
   if (ev.type === "start") {
     if (ev.arm === "steering") {
       doseApplied = ev.dose;
+      pulseActive = ev.profile === "pulse";
       fallbackActive = Boolean(ev.fallback);
       if (fallbackActive) showBadge("steering", FALLBACK_TEXT, false);
     }
@@ -123,7 +126,9 @@ function handleEvent(ev) {
     out.append(ev.text); // nœud texte ajouté : pas de recopie du texte déjà affiché
     if (ev.arm === "steering") {
       // En repli, la dose n'agit pas : on trace 0 (et la légende le dit).
-      doseHistory.push({ x: steeringTokens++, dose: fallbackActive ? 0 : doseApplied });
+      // Impulsion : dose du flux pour ce token ; constant : celle du curseur (inchangé).
+      const dose = pulseActive && typeof ev.dose === "number" ? ev.dose : doseApplied;
+      doseHistory.push({ x: steeringTokens++, dose: fallbackActive ? 0 : dose });
       scheduleCurve();
     }
   } else if (ev.type === "error") {
@@ -156,7 +161,19 @@ async function refusalMessage(response) {
   const code = response.status;
   if (code === 409) return "Une génération est déjà en cours : attendez qu'elle se termine.";
   if (code === 422) {
-    const why = typeof detail === "string" ? detail : "prompt vide ou trop long, ou dose hors de [−1 ; +1]";
+    // HTTPException : detail est une chaîne ; validation FastAPI : une liste {loc, msg}.
+    let why = "paramètre hors bornes (prompt, dose, montée ou demi-vie)";
+    if (typeof detail === "string") {
+      why = detail;
+    } else if (Array.isArray(detail) && detail.length) {
+      why = detail
+        .map((d) => {
+          const loc = Array.isArray(d && d.loc) ? d.loc[d.loc.length - 1] : null;
+          const msg = d && typeof d.msg === "string" ? d.msg : "valeur refusée";
+          return loc ? loc + " : " + msg : msg;
+        })
+        .join(" ; ");
+    }
     return "Paramètres refusés : " + why + ".";
   }
   return "Erreur du serveur (" + code + ").";
@@ -229,6 +246,11 @@ function generate(event) {
   if (config && config.max_tokens_limit) {
     params.set("max_tokens", String(Math.min(128, config.max_tokens_limit)));
   }
+  if ($("profile").value === "pulse") {
+    params.set("profile", "pulse");
+    params.set("rise", String($("rise").value));
+    params.set("half_life", String($("half-life").value));
+  }
   setStatus("Génération en cours…", false);
   setRunning(true);
   runStream(params, false);
@@ -250,9 +272,17 @@ async function init() {
     $("dose-value").textContent = formatDose($("dose").value);
   });
   $("dose-value").textContent = formatDose($("dose").value);
+  $("profile").addEventListener("change", () => {
+    $("pulse-params").hidden = $("profile").value !== "pulse";
+  });
   drawDoseCurve([]);
   try {
     config = await (await fetch("/config")).json();
+    // valeurs par défaut du profil impulsion : celles du serveur (alignées sur la mesure H6)
+    if (typeof config.default_rise === "number") $("rise").value = String(config.default_rise);
+    if (typeof config.default_half_life === "number") {
+      $("half-life").value = String(config.default_half_life);
+    }
     for (const arm of ARMS) {
       if (config.labels && config.labels[arm]) $("title-" + arm).textContent = config.labels[arm];
     }
