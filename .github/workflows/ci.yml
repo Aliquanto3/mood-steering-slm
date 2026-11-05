@@ -30,3 +30,27 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -q --tb=short
+
+  extras:
+    # Tests qui demandent torch / transformers, torch CPU sous Linux. Les extras eval
+    # (transformers<5) et ablation (transformers>=5, Qwen3.5) sont en conflit : un job par extra.
+    name: extra ${{ matrix.extra }} (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - extra: eval
+            tests: tests/test_tone.py
+          - extra: ablation
+            tests: tests/test_ablation.py tests/test_antiloop.py
+          - extra: frugal
+            tests: tests/test_frugality.py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+      - run: uv sync --locked --extra ${{ matrix.extra }}
+      - run: uv run --extra ${{ matrix.extra }} pytest -q --tb=short ${{ matrix.tests }}

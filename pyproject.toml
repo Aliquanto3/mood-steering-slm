@@ -26,6 +26,18 @@ eval = [
     "torch>=2.15.0",
     "transformers<5",
 ]
+# Qwen3.5 (lot anti-boucle) demande transformers >= 5, incompatible avec la borne de l'extra
+# ``eval`` : les deux extras sont déclarés en conflit ci-dessous. ``huggingface-hub`` et ``pyarrow``
+# servent au chargeur de QCM (``eval.datasets``) de ``scripts/run_antiloop.py``.
+ablation = [
+    "huggingface-hub",
+    "pyarrow>=26.0.1",
+    "torch>=2.15.0",
+    "transformers>=5.22.1",
+]
+frugal = [
+    "codecarbon>=3.3.2",
+]
 
 [build-system]
 requires = ["hatchling>=1.27"]
@@ -45,6 +57,13 @@ name = "llama-cpu"
 url = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
 explicit = true
 
+# torch CPU sous Linux (CI : la roue PyPI par défaut tire CUDA, plusieurs Go) ; Windows et macOS
+# gardent PyPI.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 
@@ -52,8 +71,12 @@ select = ["E", "F", "W", "I", "UP", "B"]
 testpaths = ["tests"]
 addopts = "-ra"
 
+[tool.uv]
+conflicts = [[{ extra = "eval" }, { extra = "ablation" }]]
+
 [tool.uv.sources]
 llama-cpp-python = { index = "llama-cpu" }
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [dependency-groups]
 dev = [
