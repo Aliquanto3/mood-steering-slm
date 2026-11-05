@@ -8,6 +8,7 @@ Toute validation (forme, plage de couches, dose) se fait ici, en Python : le bin
 from __future__ import annotations
 
 import ctypes
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -43,6 +44,9 @@ class SteeringBackend(Protocol):
 
     def generate(self, prompt: str, system: str | None, max_tokens: int, seed: int) -> str:
         """Génère le texte."""
+
+    def stream(self, prompt: str, system: str | None, max_tokens: int, seed: int) -> Iterator[str]:
+        """Génère le texte token par token (fragments de texte, dans l'ordre)."""
 
 
 @dataclass(frozen=True)
@@ -143,6 +147,15 @@ class Steerer:
         Chaque génération part d'un contexte vide (``reset``) : sinon le moteur
         réutiliserait les K/V du prompt calculés à la dose précédente.
         """
+        arm, fallback, eff_system = self._prepare(dose, system)
+        text = self._backend.generate(prompt, eff_system, max_tokens, seed)
+        return SteeringResult(arm, dose, text, fallback)
+
+    def _prepare(self, dose: float, system: str | None) -> tuple[str, bool, str | None]:
+        """Valide la dose, vide le contexte et pose (ou retire) le vecteur.
+
+        Rend ``(bras, repli, consigne système effective)``.
+        """
         _check_dose(dose)
         backend = self._backend
         backend.reset()
@@ -152,8 +165,7 @@ class Steerer:
                 arm, base = ARM_PROMPT_JOYFUL, JOYFUL_SYSTEM_PROMPT
             else:
                 arm, base = ARM_PROMPT_SAD, SAD_SYSTEM_PROMPT
-            text = backend.generate(prompt, compose_system(base, system), max_tokens, seed)
-            return SteeringResult(arm, dose, text, True)
+            return arm, True, compose_system(base, system)
         if dose == 0 or self._vector is None or self._il_end is None:
             backend.set_cvec(None, backend.n_embd, 0, 0)
         else:
@@ -164,8 +176,51 @@ class Steerer:
                 self._il_start,
                 self._il_end,
             )
-        text = backend.generate(prompt, system, max_tokens, seed)
-        return SteeringResult(ARM_STEERING, dose, text, False)
+        return ARM_STEERING, False, system
+
+    def open_stream(
+        self,
+        prompt: str,
+        dose: float,
+        *,
+        system: str | None = None,
+        max_tokens: int = 128,
+        seed: int = 0,
+    ) -> TokenStream:
+        """Prépare une génération en flux : même contrat que ``generate``.
+
+        La préparation (validation de la dose, ``reset``, vecteur) est immédiate ; le
+        résultat de repli (``arm``, ``fallback``) est donc connu avant le premier token.
+        Les tokens ne sont produits que lorsqu'on itère le ``TokenStream`` rendu.
+        """
+        arm, fallback, eff_system = self._prepare(dose, system)
+        tokens = self._backend.stream(prompt, eff_system, max_tokens, seed)
+        return TokenStream(arm, dose, fallback, tokens)
+
+    def stream(
+        self,
+        prompt: str,
+        dose: float,
+        *,
+        system: str | None = None,
+        max_tokens: int = 128,
+        seed: int = 0,
+    ) -> Iterator[str]:
+        """Comme ``generate``, mais rend les tokens un par un (``open_stream`` pour le repli)."""
+        return iter(self.open_stream(prompt, dose, system=system, max_tokens=max_tokens, seed=seed))
+
+
+@dataclass
+class TokenStream:
+    """Flux de tokens d'une génération ; ``arm``, ``dose`` et ``fallback`` sont connus d'avance."""
+
+    arm: str
+    dose: float
+    fallback: bool
+    tokens: Iterator[str]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.tokens)
 
 
 class LlamaCppBackend:
@@ -204,3 +259,16 @@ class LlamaCppBackend:
             messages=messages, max_tokens=max_tokens, temperature=0.0, seed=seed
         )
         return out["choices"][0]["message"]["content"]
+
+    def stream(self, prompt: str, system: str | None, max_tokens: int, seed: int) -> Iterator[str]:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        chunks = self._llm.create_chat_completion(
+            messages=messages, max_tokens=max_tokens, temperature=0.0, seed=seed, stream=True
+        )
+        for chunk in chunks:
+            text = chunk["choices"][0]["delta"].get("content")
+            if text:
+                yield text
