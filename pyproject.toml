@@ -1,6 +1,6 @@
 [project]
 name = "mood-steering"
-version = "0.0.0"
+version = "0.1.0"
 description = "Démonstrateur d'expression d'humeur d'un SLM par steering d'activations, comparé à un prompt de jeu de rôle."
 readme = "README.md"
 license = "Apache-2.0"
