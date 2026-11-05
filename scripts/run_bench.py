@@ -12,6 +12,12 @@ génération entre deux items (code retour 3 : relancer avec ``--resume``). Le p
 Sorties : ``{out}/{model_id}/{phase}/{bras}.jsonl`` (``data/runs/``, jamais versionné). Rapports :
 ``docs/rapport-verdict.md`` (cœur 3-4B) et ``docs/rapport-modeles-secondaires.md``.
 
+Énergie (H7) : ``--energy`` mesure latence, énergie et CO2 avec CodeCarbon (extra ``frugal``)
+sur la phase ``tone`` seulement (mêmes items, mêmes jetons pour tous les bras) et ajoute la
+section H7 au rapport. Lectures par unité dans ``{out}/energy_units.json``, cumulées d'une reprise
+à l'autre ; ``runs.jsonl`` note ``energy``. Une reprise avec une autre valeur d'``--energy`` est
+refusée. Estimation de la machine entière : la mesurer au repos.
+
 Mesures : ton (classifieur, polarité de contrôle, juge en aveugle sur un sous-échantillon),
 ton sous consigne neutre (H4), exactitude sur QCM, complaisance (second tour), refus d'assistant
 et sorties dégénérées. Le banc mesure l'expression d'une humeur dans le texte, pas un ressenti.
@@ -72,6 +78,7 @@ EXTRACT_CHARS = 140
 DEFAULT_OUT = Path("data") / "runs" / "campagne-3-5"
 DEFAULT_REPORT = Path("docs") / "rapport-verdict.md"
 DEFAULT_SECONDARY_REPORT = Path("docs") / "rapport-modeles-secondaires.md"
+ENERGY_UNITS_FILE = "energy_units.json"
 LECTURE_START = "<!-- lecture -->"
 LECTURE_END = "<!-- /lecture -->"
 
@@ -321,7 +328,8 @@ def check_manifest(out: Path, manifest: Mapping[str, Any], resume: bool) -> None
 def check_runtime(out: Path, runtime: Mapping[str, Any], pending: bool = True) -> None:
     """Refuse une reprise sous une autre version de llama-cpp-python ou un autre device.
 
-    Le manifeste fige le protocole ; ``runs.jsonl`` garde l'environnement de chaque reprise.
+    Le manifeste fige le protocole ; ``runs.jsonl`` garde l'environnement de chaque reprise
+    (llama-cpp, device, mesure d'énergie avec ou sans).
     ``pending`` à ``False`` (toutes les unités écrites, rien à générer) : rien à vérifier,
     les rapports se reconstruisent sur une autre machine.
     """
@@ -329,11 +337,18 @@ def check_runtime(out: Path, runtime: Mapping[str, Any], pending: bool = True) -
     if not pending or not runs.exists():
         return
     now = (runtime.get("llama_cpp"), runtime.get("device"))
+    energy_now = (bool(runtime.get("energy", False)), runtime.get("energy_country"))
     for row in read_jsonl(runs):
         old = (row.get("llama_cpp"), row.get("device"))
         if old != now:
             raise ValueError(
                 f"reprise sous un autre environnement : {old} puis {now} (llama-cpp, device)"
+            )
+        energy_old = (bool(row.get("energy", False)), row.get("energy_country"))
+        if energy_old != energy_now:
+            raise ValueError(
+                f"reprise avec une autre mesure d'énergie : {energy_old} puis {energy_now} "
+                "(--energy, --energy-country) ; unités incomparables"
             )
 
 
@@ -352,6 +367,28 @@ def model_units(spec: ModelSpec, protocol: Protocol, out: Path) -> list[tuple[st
     return units
 
 
+def _add_reading(prev: Mapping[str, float] | None, reading: Any) -> dict[str, float]:
+    new = {
+        "energy_kwh": reading.energy_kwh,
+        "emissions_kg": reading.emissions_kg,
+        "duration_s": reading.duration_s,
+    }
+    if prev is None:
+        return new
+    return {k: prev[k] + v for k, v in new.items()}
+
+
+def load_energy_units(out: Path) -> dict[str, dict[str, float]]:
+    path = Path(out) / ENERGY_UNITS_FILE
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def save_energy_units(out: Path, units: Mapping[str, Any]) -> None:
+    path = Path(out) / ENERGY_UNITS_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(units, indent=1, sort_keys=True), "utf-8", newline="\n")
+
+
 def run_campaign(
     specs: Sequence[ModelSpec],
     protocol: Protocol,
@@ -362,13 +399,17 @@ def run_campaign(
     vector_loader: VectorLoader,
     run_id: str = "campagne-3-5",
     deadline: float | None = None,
+    energy_tracker: Any = None,
     log: Callable[[str], None] = print,
 ) -> bool:
     """Génère toutes les unités (modèle x phase x bras) manquantes ; ``True`` si tout est écrit.
 
     Un modèle dont toutes les unités existent n'est pas chargé. Ordre : modèles dans l'ordre
     donné, puis phases (ton, ton sous consigne neutre, QCM, second tour), puis bras.
+    Avec ``energy_tracker``, chaque unité de la phase ton est mesurée ; les lectures sont
+    cumulées dans ``energy_units.json`` (reprise d'une unité interrompue comprise).
     """
+    energy_units = load_energy_units(out) if energy_tracker is not None else {}
     tone = [
         (item, item_seed(protocol.seed, k)) for k, item in enumerate(tone_prompts(protocol.n_tone))
     ]
@@ -404,16 +445,31 @@ def run_campaign(
                 first_rows = read_jsonl(unit_path(out, spec.model_id, PHASE_MCQ, arm.name))
                 items = second_turn_items(mcq, first_rows, challenge, protocol.seed)
                 kw["extra"] = {"turn": 2, "challenge": challenge}
-            complete = run_unit(
-                steerer,
-                arm,
-                items,
-                path,
-                run_id=run_id,
-                model_id=spec.model_id,
-                deadline=deadline,
-                **kw,
+            key = f"{spec.model_id}/{phase}/{arm.name}"
+            tracked = (
+                energy_tracker is not None
+                and phase == PHASE_TONE
+                # unité commencée sans lecture : énergie partielle, non publiée
+                and (key in energy_units or not path.with_name(path.name + ".part").exists())
             )
+            if tracked:
+                energy_tracker.start()
+            try:
+                complete = run_unit(
+                    steerer,
+                    arm,
+                    items,
+                    path,
+                    run_id=run_id,
+                    model_id=spec.model_id,
+                    deadline=deadline,
+                    **kw,
+                )
+            finally:
+                if tracked:
+                    reading = energy_tracker.stop()
+                    energy_units[key] = _add_reading(energy_units.get(key), reading)
+                    save_energy_units(out, energy_units)
             log(
                 f"{spec.model_id} {phase} {arm.name} : {time.monotonic() - t0:.0f} s"
                 + ("" if complete else " (interrompu, à reprendre)")
@@ -764,6 +820,42 @@ def h2_section(results: Mapping[str, tuple[ModelSpec, Any, list[ArmExtra], Bench
     return "\n".join(lines)
 
 
+def h7_section(out: Path, specs: Sequence[ModelSpec], protocol: Protocol) -> str | None:
+    """Section H7 (phase ton) par modèle, depuis ``energy_units.json`` ; ``None`` si rien."""
+    import shutil
+    import tempfile
+
+    from mood_steering.eval.frugality import (
+        EnergyReading,
+        frugality_section,
+        frugality_summary,
+        write_energy,
+    )
+
+    units = load_energy_units(out)
+    parts: list[str] = []
+    for spec in specs:
+        if PHASE_TONE not in phases_for(spec, protocol):
+            continue
+        with tempfile.TemporaryDirectory() as tmp:
+            readings: dict[str, EnergyReading] = {}
+            for arm in spec.arms():
+                src = unit_path(out, spec.model_id, PHASE_TONE, arm.name)
+                if not src.exists():
+                    continue
+                shutil.copyfile(src, Path(tmp) / src.name)
+                if (u := units.get(f"{spec.model_id}/{PHASE_TONE}/{arm.name}")) is not None:
+                    readings[arm.name] = EnergyReading(**u)
+            if not readings:
+                continue
+            write_energy(Path(tmp), readings)
+            body = frugality_section(frugality_summary(Path(tmp)))
+        parts.append(f"#### {spec.model_id}\n\n{body}")
+    if not parts:
+        return None
+    return "\n\n".join(parts) + "\n\nPhase ton seulement (mêmes items pour tous les bras)."
+
+
 def demote(md: str) -> str:
     return "\n".join(("#" + x) if x.startswith("#") else x for x in md.split("\n"))
 
@@ -886,6 +978,7 @@ def build_reports(
     secondary_report: Path,
     runtime: Mapping[str, Any],
     seed: int = 0,
+    energy: bool = False,
     log: Callable[[str], None] = print,
 ) -> dict[str, Any]:
     """Note, juge (cœur seulement) et écrit les rapports ; rend les jugements par modèle."""
@@ -935,6 +1028,9 @@ def build_reports(
         size_order = list(reversed(MODELS))  # du plus petit au plus grand
         ordered = sorted(specs, key=lambda s: size_order.index(s.key) if s.key in MODELS else 0)
         bonus["H2"] = h2_section({s.key: results[s.key] for s in ordered})
+    h7 = h7_section(out, specs, protocol) if energy else None
+    if h7 is not None:
+        bonus["H7"] = h7
     for spec in core:
         _, j, _, measures = results[spec.key]
         md = render_report(
@@ -954,6 +1050,26 @@ def build_reports(
         Path(report).parent.mkdir(parents=True, exist_ok=True)
         Path(report).write_text(md, encoding="utf-8", newline="\n")
         log(f"rapport écrit : {report} (verdict {j.verdict.label})")
+    if h7 is not None and not core:
+        short = ", ".join(reductions(protocol)) or "protocole complet"
+        models = ", ".join(s.model_id for s in specs)
+        md = "\n".join(
+            [
+                "# Rapport de frugalité (H7)",
+                "",
+                f"> **Mesure courte, {models}, {runtime.get('device', '?')}, n réduit.** "
+                f"Réductions de protocole : {short}. Ordre de grandeur seulement, "
+                "pas un verdict. Expression d'humeur, pas ressenti.",
+                "",
+                "## H7 : coût du steering face au prompt joyeux",
+                "",
+                h7,
+                "",
+            ]
+        )
+        Path(report).parent.mkdir(parents=True, exist_ok=True)
+        Path(report).write_text(md, encoding="utf-8", newline="\n")
+        log(f"rapport écrit : {report}")
     if secondary:
         parts = [
             "# Rapport des modèles secondaires",
@@ -1013,6 +1129,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--regenerate-vectors", action="store_true", help="calibrate(force=True) puis fin"
     )
+    p.add_argument("--energy", action="store_true", help="H7 : énergie et CO2 (extra frugal)")
+    p.add_argument("--energy-country", default=None, help="code ISO du pays (défaut du module)")
+    p.add_argument(
+        "--short-run", action="store_true", help="lève les planchers (mesure courte, sans verdict)"
+    )
     p.add_argument("--no-report", action="store_true")
     p.add_argument("--no-judge", action="store_true")
     p.add_argument("--judge-sample", type=int, default=None)
@@ -1020,8 +1141,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     p.add_argument("--secondary-report", type=Path, default=DEFAULT_SECONDARY_REPORT)
     args = p.parse_args(argv)
-    if args.tone_tokens < 64 or args.n_tone < 50 or args.n_mcq < 100:
+    floors = args.tone_tokens < 64 or args.n_tone < 50 or args.n_mcq < 100
+    if floors and not args.short_run:
         p.error("planchers : --tone-tokens >= 64, --n-tone >= 50, --n-mcq >= 100")
+    if args.energy_country and not args.energy:
+        p.error("--energy-country demande --energy")
     if args.max_judge_cost is not None and not 0 < args.max_judge_cost <= 1.0:
         p.error("--max-judge-cost doit être dans ]0, 1] $")
     return args
@@ -1074,7 +1198,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     device = "GPU (toutes les couches)" if args.n_gpu_layers else "CPU"
     if args.n_gpu_layers and not llama_cpp.llama_supports_gpu_offload():
         raise RuntimeError("--n-gpu-layers demandé mais roue llama-cpp-python sans GPU")
-    runtime = {"llama_cpp": llama_cpp.__version__, "device": device, "git": _git_sha()}
+    runtime: dict[str, Any] = {
+        "llama_cpp": llama_cpp.__version__,
+        "device": device,
+        "git": _git_sha(),
+    }
+    tracker = None
+    if args.energy:
+        from mood_steering.eval.frugality import DEFAULT_COUNTRY_ISO, CodeCarbonTracker
+
+        country = args.energy_country or DEFAULT_COUNTRY_ISO
+        runtime.update(energy=True, energy_country=country)
+        tracker = CodeCarbonTracker(country)
     pending = not all(
         p.exists() for spec in specs for _, _, p in model_units(spec, protocol, args.out)
     )
@@ -1101,6 +1236,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         backend_factory=backend_factory,
         vector_loader=vector_loader,
         deadline=deadline,
+        energy_tracker=tracker,
     )
     with (args.out / "runs.jsonl").open("a", encoding="utf-8", newline="\n") as fh:
         fh.write(
@@ -1135,6 +1271,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         report=args.report,
         secondary_report=args.secondary_report,
         runtime=runtime,
+        energy=args.energy,
     )
     return 0
 

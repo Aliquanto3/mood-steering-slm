@@ -433,3 +433,124 @@ def test_check_runtime_refuses_other_device(tmp_path):
 def test_parse_args_without_docstring(monkeypatch):
     monkeypatch.setattr(rb, "__doc__", None)
     assert rb.parse_args([]).resume is False
+
+
+# --- énergie (H7) -----------------------------------------------------------------------------
+
+
+class FakeTracker:
+    """Traqueur factice : chaque lecture vaut 0.001 kWh, 0.0001 kg et 2 s."""
+
+    def __init__(self):
+        self.starts = 0
+        self.stops = 0
+
+    def start(self):
+        self.starts += 1
+
+    def stop(self):
+        from mood_steering.eval.frugality import EnergyReading
+
+        self.stops += 1
+        return EnergyReading(energy_kwh=0.001, emissions_kg=0.0001, duration_s=2.0)
+
+
+def _tone_kw():
+    return {
+        "backend_factory": lambda s: FakeBackend(),
+        "vector_loader": vector_loader,
+        "log": lambda s: None,
+    }
+
+
+def test_energy_off_leaves_no_trace_and_report_unchanged(tmp_path):
+    spec = rb.MODELS["0.8b"]
+    run(tmp_path, [spec])
+    assert not (tmp_path / "energy_units.json").exists()
+    assert not rb.parse_args([]).energy
+    _reports(tmp_path, [spec], None)
+    assert "H7" not in (tmp_path / "rapport-secondaires.md").read_text("utf-8")
+    assert not (tmp_path / "rapport-verdict.md").exists()
+
+
+def test_energy_measures_tone_units_only_and_accumulates(tmp_path):
+    spec = rb.MODELS["0.8b"]
+    tracker = FakeTracker()
+    protocol = rb.Protocol(n_tone=10, n_mcq=6, secondary_phases=("tone", "mcq"))
+    kw = _tone_kw()
+    # échéance dépassée d'emblée : la première unité est entamée et mesurée, puis arrêt
+    assert not rb.run_campaign(
+        [spec], protocol, tmp_path, mcq_items(), energy_tracker=tracker,
+        deadline=time.monotonic() - 1, **kw,
+    )  # fmt: skip
+    assert (tracker.starts, tracker.stops) == (1, 1)
+    first = f"{spec.model_id}/tone/neutral"
+    assert rb.load_energy_units(tmp_path)[first]["energy_kwh"] == pytest.approx(0.001)
+    # reprise : l'unité entamée cumule 2 lectures, les 7 autres de la phase ton 1 chacune
+    assert rb.run_campaign([spec], protocol, tmp_path, mcq_items(), energy_tracker=tracker, **kw)
+    units = rb.load_energy_units(tmp_path)
+    assert len(units) == len(spec.arms()) == 8  # aucune lecture pour la phase mcq
+    assert all(k.split("/")[1] == "tone" for k in units)
+    assert units[first]["energy_kwh"] == pytest.approx(0.002)
+    assert units[f"{spec.model_id}/tone/steering_p1.00"]["energy_kwh"] == pytest.approx(0.001)
+    assert tracker.starts == tracker.stops == 9
+
+
+def test_energy_not_published_for_unit_started_without_measure(tmp_path):
+    spec = rb.MODELS["0.8b"]
+    protocol = rb.Protocol(n_tone=10, n_mcq=6, secondary_phases=("tone",))
+    kw = _tone_kw()
+    # sans traqueur : première unité entamée (.part présent), non mesurée
+    rb.run_campaign([spec], protocol, tmp_path, mcq_items(), deadline=time.monotonic() - 1, **kw)
+    tracker = FakeTracker()
+    rb.run_campaign([spec], protocol, tmp_path, mcq_items(), energy_tracker=tracker, **kw)
+    units = rb.load_energy_units(tmp_path)
+    assert f"{spec.model_id}/tone/neutral" not in units
+    assert len(units) == 7 and tracker.starts == 7
+
+
+def test_energy_resume_mixing_units_refused(tmp_path):
+    rt = {"llama_cpp": "0.3", "device": "CPU"}
+    on = {**rt, "energy": True, "energy_country": "FRA"}
+    (tmp_path / "runs.jsonl").write_text(json.dumps(on) + "\n", "utf-8")
+    rb.check_runtime(tmp_path, on)
+    with pytest.raises(ValueError, match="mesure d'énergie"):
+        rb.check_runtime(tmp_path, rt)
+    with pytest.raises(ValueError, match="mesure d'énergie"):
+        rb.check_runtime(tmp_path, {**on, "energy_country": "DEU"})
+    # campagne ancienne sans le champ : équivaut à « sans énergie »
+    (tmp_path / "runs.jsonl").write_text(json.dumps(rt) + "\n", "utf-8")
+    rb.check_runtime(tmp_path, rt)
+    with pytest.raises(ValueError, match="mesure d'énergie"):
+        rb.check_runtime(tmp_path, on)
+
+
+def test_cli_energy_options_and_short_run():
+    args = rb.parse_args(["--energy"])
+    assert args.energy and args.energy_country is None
+    with pytest.raises(SystemExit):
+        rb.parse_args(["--energy-country", "DEU"])
+    with pytest.raises(SystemExit):
+        rb.parse_args(["--n-tone", "10"])
+    assert rb.parse_args(["--n-tone", "10", "--short-run"]).n_tone == 10
+
+
+def test_h7_short_report_when_no_core_model(tmp_path):
+    spec = rb.MODELS["0.8b"]
+    protocol = rb.Protocol(n_tone=10, n_mcq=6, secondary_phases=("tone",))
+    rb.run_campaign(
+        [spec], protocol, tmp_path, mcq_items(), energy_tracker=FakeTracker(), **_tone_kw()
+    )
+    manifest = rb.build_manifest([spec], protocol, mcq_items(), {spec.key: {}})
+    rb.check_manifest(tmp_path, manifest, resume=False)
+    rb.build_reports(
+        tmp_path, [spec], protocol, mcq_items(), FakeScorer(), judge_client_factory=None,
+        judge_sample=20, judge_max_cost=1.0, report=tmp_path / "frugalite.md",
+        secondary_report=tmp_path / "secondaires.md", energy=True,
+        runtime={"llama_cpp": "0.0", "device": "CPU"}, log=lambda s: None,
+    )  # fmt: skip
+    text = (tmp_path / "frugalite.md").read_text(encoding="utf-8")
+    assert "Mesure courte, Qwen3.5-0.8B-Q4_K_M, CPU, n réduit." in text
+    assert "#### Qwen3.5-0.8B-Q4_K_M" in text and "| neutral | 10 |" in text
+    assert "| 0.001 | 0.0001 | 0.0001 | 1e-05 |" in text
+    assert "estimation, pas une mesure au wattmètre" in text
