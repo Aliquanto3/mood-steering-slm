@@ -322,3 +322,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 06:40 · report · rapport-verdict.md dit encore « H6/H2/H5 non traitées » (texte généré par run_bench) : à réaligner après 5.4 · —
 - 2026-11-05 06:42 · 5.1 · CI · verte · 90ab1f2
 - 2026-11-05 06:42 · 5.1 · fusion · #23 fusionnée, MERGED vérifié · 4719544
+- 2026-11-05 07:40 · 5.4 · dev · fini, H5 non tenue (échelle 0,2 seule valide, 0,4 dégénérée, mesure CPU) · 86d1b15
