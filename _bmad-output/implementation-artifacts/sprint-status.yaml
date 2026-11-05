@@ -133,5 +133,5 @@ action_items:
     action: "A2 relance 6.2 après A1 : pilote 10 items à 2048 tokens (origine < 80
       % tronquées sinon 4096), n réduit, contrôle croisé slm-quality-bench chiffré"
     owner: "Anaël puis dev-story"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-05.md"

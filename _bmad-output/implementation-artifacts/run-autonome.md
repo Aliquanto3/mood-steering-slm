@@ -382,3 +382,8 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-06 00:30 · A2 · second-avis · chiffres tous confirmés ; 4 medium (contrôle croisé apparié possible via question_hash, écart du bench hors de l'IC de la chirurgie, surinterprétation de l'ablation 1,0, agrégat bench mêlant le plafond rag 2048), 3 low ; incident : tentative de téléchargement HF par le second avis, sans écriture · 0c0bc0c
 - 2026-11-06 00:30 · A2 · review · passe 1 lancée (Opus) · —
 - 2026-11-06 00:30 · A4 · mesure · 1er bras 206 s, 3,45 Wh : non saturée ; 35 passes, fin estimée ~02 h 25 · —
+- 2026-11-06 00:37 · A2 · review · passe 1 (Opus) : 4 medium et 4 low corrigés ; contrôle croisé apparié hors rag +0,31 [0,28 ; 0,35] · ff109df
+- 2026-11-06 00:37 · A2 · review · passe 2 (Sonnet) : 0 Important, 1 nit corrigé · daf01d1
+- 2026-11-06 00:37 · A2 · CI · verte (6 jobs) · daf01d1
+- 2026-11-06 00:37 · A2 · fusion · #32 fusionnée, MERGED vérifié · 8297a0d
+- 2026-11-06 00:37 · epic 6 · attente humaine · verdict de l'epic 6 à revoir par Anaël : E6-2 tenu, E6-1 partiel (saturation 78 %, ablation 1,0 = indice non corrigé) · —
