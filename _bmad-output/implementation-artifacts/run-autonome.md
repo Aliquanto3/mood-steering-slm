@@ -329,3 +329,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 07:43 · 6.2 · second-avis · 0 high, 3 medium, 4 low (rapport seul ; chiffres recalculés conformes) · c0a0077
 - 2026-11-05 07:43 · 6.2 · review · orchestrateur (doc seule) : 3 medium et 4 low corrigés · 544bea7
 - 2026-11-05 07:43 · 6.2 · PR · #24 ouverte · 544bea7
+- 2026-11-05 07:44 · 5.4 · second-avis · 0 high, 3 medium (valence des paires agitées, critères non pré-enregistrés et calme non calibré, verdict sur proxy non validé), 7 low · 86d1b15
+- 2026-11-05 07:44 · 5.4 · review · passe 1 lancée (Opus, merge origin/main d'abord) · —
