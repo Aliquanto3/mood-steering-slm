@@ -186,3 +186,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:32 · 1.4 · décision · re-noter les sorties existantes avec le classifieur de 3.2 + détecteur de refus, plages recalculées par code, VRAM mesurée · —
 - 2026-11-05 01:32 · 1.4 · review · passe 1 lancée · —
 - 2026-11-05 01:32 · 4.1 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; ajoute Steerer.stream) · —
+- 2026-11-05 01:34 · 4.1 · dev · fini, 11 tests (254 au total) ; Steerer.open_stream / stream ajoutés ; fastapi, uvicorn en base · 2e2334c
+- 2026-11-05 01:34 · 4.1 · second-avis · lancé · —
