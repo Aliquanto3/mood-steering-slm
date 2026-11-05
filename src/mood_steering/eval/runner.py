@@ -13,7 +13,7 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mood_steering.eval.arms import KIND_PROMPT, KIND_STEERING, Arm, check_safe_name
 from mood_steering.steering import (
@@ -22,6 +22,9 @@ from mood_steering.steering import (
     Steerer,
     compose_system,
 )
+
+if TYPE_CHECKING:
+    from mood_steering.eval.frugality import EnergyTracker
 
 NEUTRAL_INSTRUCTION = "Réponds de façon neutre, sans exprimer d'émotion particulière."
 DEFAULT_RUNS_DIR = Path("data") / "runs"
@@ -109,6 +112,7 @@ def run_bench(
     max_tokens: int = 128,
     neutral_instruction: bool = False,
     overwrite: bool = False,
+    energy_tracker: EnergyTracker | None = None,
 ) -> dict[str, Path]:
     """Passe les mêmes items à chaque bras ; rend ``{nom du bras: fichier JSONL}``.
 
@@ -131,20 +135,33 @@ def run_bench(
         raise FileExistsError(f"run déjà présent dans {target} (overwrite=True pour l'écraser)")
     for old in stale:
         old.unlink()
-    return {
-        arm.name: run_arm(
-            arm,
-            items,
-            steerer,
-            run_id=run_id,
-            model_id=model_id,
-            out_dir=target,
-            seed=seed,
-            max_tokens=max_tokens,
-            neutral_instruction=neutral_instruction,
-        )
-        for arm in arms
-    }
+    if stale:  # lectures d'énergie du run écrasé : ne pas les mêler au nouveau
+        (target / "energy.json").unlink(missing_ok=True)
+    paths: dict[str, Path] = {}
+    readings: dict[str, Any] = {}
+    for arm in arms:
+        if energy_tracker is not None:
+            energy_tracker.start()
+        try:
+            paths[arm.name] = run_arm(
+                arm,
+                items,
+                steerer,
+                run_id=run_id,
+                model_id=model_id,
+                out_dir=target,
+                seed=seed,
+                max_tokens=max_tokens,
+                neutral_instruction=neutral_instruction,
+            )
+        finally:
+            if energy_tracker is not None:
+                readings[arm.name] = energy_tracker.stop()
+    if energy_tracker is not None:
+        from mood_steering.eval.frugality import write_energy
+
+        write_energy(target, readings)
+    return paths
 
 
 def load_run(out_dir: Path) -> dict[str, list[dict[str, Any]]]:

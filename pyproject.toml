@@ -35,6 +35,9 @@ ablation = [
     "torch>=2.15.0",
     "transformers>=5.22.1",
 ]
+frugal = [
+    "codecarbon>=3.3.2",
+]
 
 [build-system]
 requires = ["hatchling>=1.27"]
