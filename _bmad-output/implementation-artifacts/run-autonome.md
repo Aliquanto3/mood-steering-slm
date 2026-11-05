@@ -254,3 +254,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:29 · 6.2 · CI · verte (5 jobs, dont extra eval et extra ablation) · f5505be
 - 2026-11-05 02:29 · 6.2 · fusion · #17 fusionnée (partie code), MERGED vérifié ; mesure à lancer après 3.5 · adb031e
 - 2026-11-05 02:29 · 5.3 · dev · lancé (partie code, cadrage dans le prompt ; ne touche pas run_bench.py, mesure avec la campagne) · —
+- 2026-11-05 02:32 · 5.3 · dev · code fini, 11 tests ; energy_tracker branché dans run_bench (runner.py), extra frugal ; CodeCarbon non exécuté · 3ac09bb
+- 2026-11-05 02:32 · 5.3 · second-avis · lancé · —
