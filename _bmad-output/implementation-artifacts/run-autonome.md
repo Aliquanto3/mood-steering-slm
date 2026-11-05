@@ -313,3 +313,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:56 · 5.1 · dev · fini : H6 non (pulse ≈ neutre sur tous les segments, constant +0,39 à +0,60), GPU, 50 prompts · 501f059
 - 2026-11-05 05:56 · 5.1 · second-avis · lancé (Haiku), priorité : vérifier que la dose du pulse est appliquée · 501f059
 - 2026-11-05 05:56 · 5.4 · dev · lancé (Sonnet, worktree) : paires calme ↔ agitation, calibration 4B, cosinus, scripts/run_axis.py, rapport H5 · —
+- 2026-11-05 05:58 · 5.1 · second-avis · dose du pulse bien appliquée ; 3 medium (constant steere le prompt, pulse non : confusion ; libellé dose brute ; demo.md surpromet), 4 low · 501f059
+- 2026-11-05 05:58 · 5.1 · review · lancée (Opus) avec deux bras de contrôle : constant sans prompt, décroissance seule · —
