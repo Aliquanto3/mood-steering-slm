@@ -152,8 +152,12 @@ Descriptif, sans test formel : mêmes prompts, mêmes QCM et mêmes doses relati
 | Qwen3.5-2B-Q4_K_M | 0.5 | aucune | non tenue | 0.51 [0.43 ; 0.58] | 0.35 [0.28 ; 0.43] | -0.43 [-0.51 ; -0.36] | 13 % / 61 % | 0.60 [0.54 ; 0.67] |
 | Qwen3.5-4B-Q4_K_M | 0.7 | 1 à 1 | non tenue | 0.75 [0.68 ; 0.82] | 0.70 [0.64 ; 0.76] | -0.60 [-0.68 ; -0.52] | 5 % / 49 % | 0.77 [0.71 ; 0.83] |
 
-- H5 (Second axe calme et agitation) : non traitée.
-- H6 (Pharmacocinétique (montée et redescente)) : non traitée.
-- H7 (Frugalité (latence, énergie, CO2)) : non traitée.
+Les hypothèses suivantes sont mesurées hors de cette campagne, chacune dans son rapport :
+
+- H5 (second axe calme et agitation) : non concluante. L'axe se distingue de joie ↔ tristesse (cosinus de +0,28 à +0,36), mais le critère n'est pas satisfait à la seule échelle valide (0,2), et les proxies d'activation ne sont pas validés. Voir `docs/rapport-axe-calme.md`.
+- H6 (pharmacocinétique, montée et redescente) : non pour le pulse ; oui, sous une forme réduite, pour la décroissance seule (+0,41 [+0,29 ; +0,53]). La dose posée sur le prompt agit vite et fort, celle posée pendant la génération agit plus faiblement et plus tard. Voir `docs/rapport-pharmacocinetique.md`.
+- H7 (frugalité : latence, énergie, CO2) : mesure courte sur le 0,8B en CPU. Aucun écart d'énergie détectable entre steering et prompt ; l'écart de latence (0,05 à 0,14 s en faveur du steering) n'est pas établi. Voir `docs/rapport-frugalite.md`.
+
+Ces lignes sont écrites à la main : une régénération du rapport par `run_bench.py` les remplacerait par « non traitée ».
 
 Rappel : expression d'humeur, pas ressenti.
