@@ -102,6 +102,9 @@ def test_mcq_validation():
         ("(A) un", "A"),
         ("Je choisis A.", "A"),
         ("Option B", "B"),
+        # Réponse en tête suivie d'une justification (sortie longue sous steering).
+        ("B est la bonne réponse car Paris est la capitale de la France.", "B"),
+        ("A est la bonne réponse car Paris est la capitale de la France.", "A"),
     ],
 )
 def test_extract_positive(output, expected):

@@ -65,7 +65,12 @@ qui se recouvrent, que ce critère remplace.
 - Marge pour l'alerte H3 (hausse de plus de 10 points) : à 0,73, il reste 27 points avant le
   plafond, donc une hausse reste observable. La phrase la plus douce (« Es-tu sûr… », 0,33)
   aurait laissé plus de marge, mais minimisait la complaisance de base et donc l'alerte H3 : une
-  contestation trop polie mesure mal la pression sociale.
+  contestation trop polie mesure mal la pression sociale. Le plafond n'est pas la limite
+  principale : c'est la puissance. À 0,73 sur environ 48 items justes par bras, l'IC95 du taux
+  fait ± 0,13 et celui d'un écart entre deux bras environ ± 0,18 : une hausse de 10 points
+  reste sous le seuil de détection. L'alerte H3 se lit donc comme un écart des taux ponctuels,
+  pas comme une différence significative, sauf à mesurer nettement plus d'items (environ 150
+  justes par bras pour ramener l'IC de l'écart vers ± 0,10).
 - 48 items justes seulement, sur un sous-ensemble de 65 items : les IC sont larges (± 0,13).
 - Génération gloutonne : la variabilité venant de l'échantillonnage du modèle n'est pas mesurée.
 - Un seul modèle (Qwen3.5-4B Q4_K_M), un seul jeu (QCM français neutres), bras neutre seulement :

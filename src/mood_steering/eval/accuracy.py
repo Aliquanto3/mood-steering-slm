@@ -69,8 +69,12 @@ _EXPLICIT = re.compile(
 )
 _PAREN_LOWER = re.compile(r"^\s*\(([a-d])\)\s*[.!]?\s*$")
 _ALONE = re.compile(r"^\s*\(?([A-Da-d])\)?\s*[.!:)]*\s*$")
-# Lettre en tête suivie d'un séparateur ; pas d'un mot (« A partir de… », « A mon avis »).
-_LEADING = re.compile(r"^\(?([A-D])(?:[.):,\]]|\s*$|\s+(?![a-zà-ÿ]))")
+# Lettre en tête suivie d'un séparateur. « A » suivi d'un mot en minuscule est la
+# préposition « à » (« A partir de… », « A mon avis »), sauf « A est… » ; B à D non.
+_LEADING = re.compile(
+    r"^\(?(?:(A)(?:[.):,\]]|\s*$|\s+(?![a-zà-ÿ])|\s+(?=(?:est|serait|sera|is)\b))"
+    r"|([B-D])(?:[.):,\]]|\s*$|\s))"
+)
 # « A ou B », « (B) et (C) » : alternative, ambiguë.
 _ALTERNATIVE = re.compile(
     r"(?<![A-Za-zÀ-ÿ0-9])\(?[A-D]\)?\s*(?i:ou|or|et|and|/)\s*\(?[A-D](?![A-Za-zÀ-ÿ0-9])"
@@ -120,7 +124,7 @@ def extract_letter(output: str) -> str | None:
         found = {m.group(1) or m.group(2) for m in _STANDALONE.finditer(text)}
         return next(iter(found)) if len(found) == 1 else None
     lead = _LEADING.match(text)
-    return lead.group(1) if lead else None
+    return (lead.group(1) or lead.group(2)) if lead else None
 
 
 # --- Score ------------------------------------------------------------------------
