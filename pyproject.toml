@@ -26,6 +26,10 @@ eval = [
     "torch>=2.15.0",
     "transformers<5",
 ]
+ablation = [
+    "torch>=2.15.0",
+    "transformers<5",
+]
 
 [build-system]
 requires = ["hatchling>=1.27"]
@@ -45,6 +49,13 @@ name = "llama-cpu"
 url = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
 explicit = true
 
+# torch CPU sous Linux (CI : la roue PyPI par défaut tire CUDA, plusieurs Go) ; Windows et macOS
+# gardent PyPI.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 
@@ -54,6 +65,7 @@ addopts = "-ra"
 
 [tool.uv.sources]
 llama-cpp-python = { index = "llama-cpu" }
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [dependency-groups]
 dev = [
