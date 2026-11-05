@@ -233,11 +233,14 @@ class SlowBackend(StreamBackend):
         self.started = threading.Event()
         self.produced = 0
         self.closed = False
+        self.gate = None  # Event : bloque les tokens tant qu'il n'est pas levé
 
     def stream(self, prompt, system, max_tokens, seed):
         self.started.set()
         try:
             for i in range(max_tokens):
+                if self.gate is not None:
+                    self.gate.wait(10)
                 time.sleep(0.01)
                 self.produced += 1
                 yield f"t{i}"
@@ -258,6 +261,9 @@ def make_slow():
 
 def test_seconde_generation_409():
     app, backends = make_slow()
+    gate = threading.Event()  # la 1re génération reste en cours jusqu'au contrôle du 409
+    for b in backends:
+        b.gate = gate
     first = {}
 
     def run_first():
@@ -269,6 +275,7 @@ def test_seconde_generation_409():
     r = TestClient(app).get("/stream", params={"prompt": "b"})
     assert r.status_code == 409
     assert r.json() == {"detail": BUSY_MESSAGE}
+    gate.set()
     t.join(10)
     assert first["r"].status_code == 200
     assert first["r"].text.rstrip().endswith('data: {"type": "done"}')
