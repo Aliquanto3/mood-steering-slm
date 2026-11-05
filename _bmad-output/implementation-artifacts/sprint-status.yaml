@@ -56,10 +56,10 @@ development_status:
   3-5-campagne-de-mesure-sur-la-tour: done
   epic-3-retrospective: optional
 
-  epic-4: in-progress
+  epic-4: done
   4-1-serveur-fastapi-et-trois-flux-sse: done
   4-2-interface-trois-colonnes-curseur-et-courbe-de-dose: done
-  4-3-répétition-sur-le-portable-et-release-v0-1-0: in-progress
+  4-3-répétition-sur-le-portable-et-release-v0-1-0: done
   epic-4-retrospective: optional
 
   epic-5: in-progress

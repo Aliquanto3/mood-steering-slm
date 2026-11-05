@@ -283,3 +283,7 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:06 · 4.3 · review · lancée (Sonnet, story de doc) · —
 - 2026-11-05 05:07 · 4.3 · review · 3 medium + 4 low corrigés, plus 1 medium trouvé (continuations \ cassées sous PowerShell) ; passe 2 sautée, story de doc · c689c02
 - 2026-11-05 05:07 · 4.3 · PR · ouverte · c689c02
+- 2026-11-05 05:09 · 4.3 · CI · verte · c689c02
+- 2026-11-05 05:09 · 4.3 · fusion · #20 fusionnée, MERGED vérifié · 1077145
+- 2026-11-05 05:09 · 4.3 · décision · tag annoté v0.1.0 et release GitHub publiés ; topic status-spec → status-bench · 1077145
+- 2026-11-05 05:09 · 4.3 · attente humaine · test de la démo sur le portable par Anaël (non bloquant) · —
