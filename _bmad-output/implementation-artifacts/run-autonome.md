@@ -271,3 +271,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 04:46 · 3.5 · décision · rejugement lancé par l'orchestrateur (plafond 0,55 $, ancien judge.json gardé en judge.v1.json) · —
 - 2026-11-05 04:54 · 3.5 · décision · juge relancé à 128 tokens : 13 invalides sur 200 (contre 56), coût 0,45 $ (0,87 $ au total, plafond 1 $), rapport mis à jour · 0c95dd9
 - 2026-11-05 04:54 · 3.5 · review · passe 2 lancée (Opus) · —
+- 2026-11-05 04:57 · 3.5 · review · passe 2 : 1 medium corrigé (environnement de reprise vérifié seulement s'il reste à générer) ; passe 3 sautée, correctif de 11 lignes vérifié par l'orchestrateur · 66f2d0d
+- 2026-11-05 04:57 · 3.5 · PR · #19 ouverte · 66f2d0d
