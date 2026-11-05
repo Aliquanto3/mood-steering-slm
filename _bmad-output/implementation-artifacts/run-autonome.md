@@ -208,3 +208,7 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:54 · 4.2 · CI · verte sur les trois OS · 62038f5
 - 2026-11-05 01:54 · 4.2 · fusion · #13 fusionnée, MERGED vérifié · f1f7418
 - 2026-11-05 01:54 · 2.3 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; boucle bas niveau sample/eval) · —
+- 2026-11-05 01:56 · 1.4 · review · passe 1 : 1 high, 7 medium, 4 low corrigés ; re-notation au classifieur : pôle tristesse non validé sur les trois Qwen3.5 ; VRAM 4B 3 387 Mio ; panne llama_decode reproduite (toutes couches, UTF-8 incomplet) · ad1e672
+- 2026-11-05 01:56 · 1.4 · décision · option 1 : Qwen3.5 4B/2B/0.8B, couches mid, max_scale par le pôle joie 0,7/0,5/0,15 ; pôle tristesse mesuré par le banc 3.5 (doses −0,3/−0,5/−0,7) ; plage de couches toujours passée au Steerer ; Llama-3.2-1B en réserve · —
+- 2026-11-05 01:56 · 2.3 · décision · contrat ajouté : generate et stream en boucle bas niveau bornée à max_tokens (remède à la panne llama_decode) · —
+- 2026-11-05 01:56 · 1.4 · review · passe 2 lancée · —
