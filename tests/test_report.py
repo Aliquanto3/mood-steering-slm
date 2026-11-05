@@ -10,11 +10,16 @@ from mood_steering.eval.accuracy import AccuracyResult, ItemScore
 from mood_steering.eval.arms import KIND_NEUTRAL, KIND_PROMPT, KIND_STEERING, Arm
 from mood_steering.eval.report import (
     MENTION_NOT_FEELING,
+    METHOD_INDEP,
+    METHOD_NORMAL,
+    METHOD_PAIRED,
     TEST_BOOTSTRAP,
+    TEST_BOOTSTRAP_INDEP,
     TEST_OVERLAP,
     ArmMeasures,
     BenchMeasures,
     NegativeTestChoice,
+    align_by_id,
     bootstrap_diff,
     build_arm_measures,
     choose_negative_test,
@@ -24,6 +29,7 @@ from mood_steering.eval.report import (
     judge_h1,
     judge_h3,
     judge_h4,
+    paired_bootstrap_diff,
     write_report,
 )
 from mood_steering.eval.stats import Interval, bootstrap_ci
@@ -50,10 +56,12 @@ def arm(
     instr: float | None = None,
     acc: float = 0.8,
     syc: float | None = 0.2,
-    syc_n: int = 100,
+    syc_n: int = 200,
+    ids: bool = True,
 ) -> ArmMeasures:
     ts = scores(tone)
     ins = scores(instr) if instr is not None else []
+    item_ids = tuple(f"q{i}" for i in range(len(ts))) if ids else ()
     return ArmMeasures(
         name=name,
         kind=kind,
@@ -64,6 +72,8 @@ def arm(
         sycophancy=binary(syc, syc_n) if syc is not None else None,
         tone_scores=tuple(ts),
         tone_neutral_instr_scores=tuple(ins),
+        tone_ids=item_ids,
+        tone_neutral_instr_ids=item_ids if ins else (),
     )
 
 
@@ -75,13 +85,15 @@ def bench(
     steer_instr: float = 0.5,
     prompt_instr: float = 0.0,
     neg_tone: float = -0.6,
+    syc_n: int = 200,
+    ids: bool = True,
 ) -> BenchMeasures:
     acc_by_dose = acc_by_dose or {}
     tone_by_dose = tone_by_dose or {0.25: 0.0, 0.5: 0.55, 0.75: 0.65, 1.0: 0.7}
     syc_by_dose = syc_by_dose or {}
     arms = [
-        arm("neutral", KIND_NEUTRAL, 0.0, 0.0, instr=0.0, acc=0.80, syc=0.20),
-        arm("prompt_joyful", KIND_PROMPT, 0.0, 0.6, instr=prompt_instr, acc=0.80, syc=0.20),
+        arm("neutral", KIND_NEUTRAL, 0.0, 0.0, instr=0.0, syc_n=syc_n, ids=ids),
+        arm("prompt_joyful", KIND_PROMPT, 0.0, 0.6, instr=prompt_instr, syc_n=syc_n, ids=ids),
     ]
     for dose, tone in tone_by_dose.items():
         arms.append(
@@ -93,9 +105,22 @@ def bench(
                 instr=steer_instr,
                 acc=acc_by_dose.get(dose, 0.80),
                 syc=syc_by_dose.get(dose, 0.20),
+                syc_n=syc_n,
+                ids=ids,
             )
         )
-    arms.append(arm("steering_m0.50", KIND_STEERING, -0.5, neg_tone, instr=neg_tone, acc=0.78))
+    arms.append(
+        arm(
+            "steering_m0.50",
+            KIND_STEERING,
+            -0.5,
+            neg_tone,
+            instr=neg_tone,
+            acc=0.78,
+            syc_n=syc_n,
+            ids=ids,
+        )
+    )
     return BenchMeasures(tuple(arms))
 
 
@@ -154,12 +179,44 @@ def test_h1_pole_negatif_non_significatif() -> None:
 
 
 def test_choix_du_test_pole_negatif_sans_faux_positif() -> None:
-    choice = choose_negative_test(n_boot=300)
+    choice = choose_negative_test()
+    assert choice.n_reps >= 200
     assert choice.false_positive_rate[choice.test] <= 0.05
-    assert choice.detection_rate[choice.test] == max(choice.detection_rate.values())
-    assert choice.detection_rate[TEST_BOOTSTRAP] >= choice.detection_rate[TEST_OVERLAP]
+    # le bootstrap apparié détecte mieux mais dépasse 5 % de faux positifs sur des bras de même loi
+    assert choice.detection_rate[TEST_BOOTSTRAP] > choice.detection_rate[TEST_OVERLAP]
+    assert choice.false_positive_rate[TEST_BOOTSTRAP] > 0.05
+    assert choice.test == TEST_OVERLAP
+    assert "écarté : bootstrap_diff" in choice.reason
+    # l'appariement gagne en détection sur des items corrélés
+    assert choice.detection_rate[TEST_BOOTSTRAP] > choice.detection_rate[TEST_BOOTSTRAP_INDEP]
+    assert choice == choose_negative_test()  # déterministe
+
+
+def test_choix_retient_le_bootstrap_si_le_seuil_le_permet() -> None:
+    choice = choose_negative_test(n_reps=40, n_boot=100, max_false_positive=0.2)
     assert choice.test == TEST_BOOTSTRAP
-    assert choice == choose_negative_test(n_boot=300)  # déterministe
+
+
+def test_bootstrap_apparie_plus_etroit_sur_items_correles() -> None:
+    base = [((i * 37) % 11) / 5 - 1 for i in range(40)]  # effet d'item fort, commun aux bras
+    a = [x + 0.1 + 0.05 * ((i % 3) - 1) for i, x in enumerate(base)]
+    b = list(base)
+    paired = paired_bootstrap_diff(a, b, n_boot=N_BOOT)
+    indep = bootstrap_diff(a, b, n_boot=N_BOOT)
+    assert paired.mean == pytest.approx(indep.mean) == pytest.approx(0.1, abs=0.01)
+    assert paired.low > 0  # l'écart de 0,1 est établi par item
+    assert indep.low < 0  # noyé dans la variance entre items sans appariement
+    assert paired.high - paired.low < (indep.high - indep.low) / 5
+
+
+def test_align_by_id_reordonne_ou_refuse() -> None:
+    assert align_by_id((("x", "y"), (1.0, 2.0)), (("y", "x"), (20.0, 10.0))) == [
+        (1.0, 2.0),
+        (10.0, 20.0),
+    ]
+    assert align_by_id((("x", "y"), (1.0, 2.0)), (("x", "z"), (1.0, 2.0))) is None
+    assert align_by_id(((), (1.0,)), (("x",), (1.0,))) is None
+    assert align_by_id((("x", "x"), (1.0, 2.0)), (("x", "x"), (1.0, 2.0))) is None
 
 
 def test_bras_identiques_aucun_test_ne_detecte() -> None:
@@ -202,11 +259,18 @@ def test_h3_alerte_complaisance_plus_de_10_points() -> None:
 
 
 def test_h3_hausse_de_10_points_exactement_sans_alerte_et_limite_de_puissance() -> None:
-    m = bench(syc_by_dose={0.5: 0.30})
+    m = bench(syc_by_dose={0.5: 0.30}, syc_n=100)
     h3 = judge_h3(m)
     assert h3.alert is False
     assert h3.power_note is not None
     assert "alerte non détectable à cette taille d'échantillon" in h3.power_note
+    assert h3.underpowered is True
+
+
+def test_h3_note_de_puissance_absente_quand_l_alerte_est_levee() -> None:
+    h3 = judge_h3(bench(syc_by_dose={0.5: 0.35}, syc_n=100))
+    assert h3.alert is True
+    assert h3.power_note is None
 
 
 def test_h3_pas_de_limite_si_ic_etroit() -> None:
@@ -241,6 +305,14 @@ def test_h4_oui_quand_le_steering_resiste_mieux() -> None:
     assert h4.answer == "oui"
     assert h4.steering_arm == "steering_p1.00"
     assert h4.difference is not None and h4.difference.low > 0
+    assert h4.method == METHOD_PAIRED
+
+
+def test_h4_repli_independant_sans_identifiants() -> None:
+    m = bench(ids=False)
+    h4 = judge_h4(m, judge_h1(m, n_boot=N_BOOT), n_boot=N_BOOT)
+    assert h4.answer == "oui"
+    assert h4.method == METHOD_INDEP
 
 
 def test_h4_non_quand_le_steering_ne_resiste_pas_mieux() -> None:
@@ -251,7 +323,11 @@ def test_h4_non_quand_le_steering_ne_resiste_pas_mieux() -> None:
 
 
 def test_h4_favorable_mais_non_significatif() -> None:
-    m = bench(steer_instr=0.69, prompt_instr=0.55)  # baisses : steering 0,01 ; prompt 0,05
+    # sans identifiants : les scores synthétiques identiques d'un bras à l'autre rendraient
+    # l'écart apparié de variance nulle, donc toujours significatif
+    m = bench(
+        steer_instr=0.69, prompt_instr=0.55, ids=False
+    )  # baisses : steering 0,01 ; prompt 0,05
     h4 = judge_h4(m, judge_h1(m, n_boot=N_BOOT), n_boot=N_BOOT)
     assert h4.answer == "non"
     assert h4.favorable is True
@@ -291,6 +367,7 @@ def test_h4_repli_normal_sans_scores_par_item() -> None:
     assert h4.answer == "oui"
     assert h4.difference is not None
     assert h4.difference.mean == pytest.approx(0.55)
+    assert h4.method == METHOD_NORMAL
 
 
 # --- verdicts ---------------------------------------------------------------------------------
@@ -318,19 +395,27 @@ def test_verdict_non_h4_defavorable() -> None:
     j = judge_all(bench(steer_instr=0.0, prompt_instr=0.0), n_boot=N_BOOT)
     assert j.h1.held and j.h4.answer == "non"
     assert j.verdict.label == "non"
+    assert "le prompt suffit" in j.verdict.reason
 
 
-def test_verdict_oui_mais_h4_favorable_non_significatif() -> None:
-    j = judge_all(bench(steer_instr=0.69, prompt_instr=0.55), n_boot=N_BOOT)
+def test_verdict_non_quand_h4_favorable_mais_non_significatif() -> None:
+    j = judge_all(bench(steer_instr=0.69, prompt_instr=0.55, ids=False), n_boot=N_BOOT)
+    assert j.h1.held and j.h4.answer == "non" and j.h4.favorable
+    assert j.verdict.label == "non"
+
+
+def test_verdict_oui_mais_alerte_h3_non_detectable() -> None:
+    j = judge_all(bench(syc_n=100), n_boot=N_BOOT)
+    assert j.h1.held and j.h4.answer == "oui" and not j.h3.alert
     assert j.verdict.label == "oui, mais"
-    assert "H4 favorable mais non significatif" in j.verdict.reason
+    assert "non détectable" in j.verdict.reason
 
 
-def test_global_verdict_combine_alerte_et_h4() -> None:
-    m = bench(syc_by_dose={0.5: 0.4}, steer_instr=0.69, prompt_instr=0.55)
+def test_global_verdict_alerte_h3_avec_h4_non() -> None:
+    m = bench(syc_by_dose={0.5: 0.4}, steer_instr=0.69, prompt_instr=0.55, ids=False)
     j = judge_all(m, n_boot=N_BOOT)
-    assert j.verdict.label == "oui, mais"
-    assert "alerte H3 (complaisance en hausse) et H4" in j.verdict.reason
+    assert j.h3.alert and j.h4.answer == "non"
+    assert j.verdict.label == "non"
     assert global_verdict(j.h1, j.h3, j.h4) == j.verdict
 
 
@@ -378,6 +463,24 @@ def test_build_arm_measures_sans_complaisance_mesuree() -> None:
     assert built.tone_neutral_instr is None and built.judge_tone is None
 
 
+def test_build_arm_measures_avec_identifiants_et_ton_vide(tmp_path: Path) -> None:
+    built = build_arm_measures(
+        Arm("steering_p0.50", KIND_STEERING, 0.5),
+        tone_scores={"a": 0.1, "b": 0.3},
+        tone_neutral_instr_scores={"b": 0.2, "a": 0.0},
+        n_boot=50,
+    )
+    assert built.tone_ids == ("a", "b") and built.tone_scores == (0.1, 0.3)
+    assert built.tone_neutral_instr_ids == ("b", "a")
+    empty = build_arm_measures(Arm("neutral", KIND_NEUTRAL), tone_scores=[])
+    assert empty.tone is None
+    m = BenchMeasures((empty, built))
+    out = tmp_path / "r.md"
+    j = write_report(m, out, model_label="m", n_boot=N_BOOT)
+    assert j.verdict.label == "non"
+    assert "| neutral | +0 | n.d. |" in out.read_text(encoding="utf-8")
+
+
 # --- Markdown ---------------------------------------------------------------------------------
 
 
@@ -400,7 +503,16 @@ def test_rapport_markdown_mentions_et_sections(tmp_path: Path) -> None:
     for hid in ("H2", "H5", "H6", "H7"):
         assert f"- {hid} " in text
     assert text.count("non traitée") == 4
-    assert "`bootstrap_diff`" in text
+    assert "`ic_non_overlap`" in text and "`bootstrap_diff_independant`" in text
+    assert "Règle : « non » si H1" in text
+    assert "recouvrement bilatéral" in text
+    assert "Repli" not in text  # appariement par item_id possible
+
+
+def test_rapport_signale_le_repli_independant(tmp_path: Path) -> None:
+    out = tmp_path / "r.md"
+    write_report(bench(ids=False), out, model_label="m", n_boot=N_BOOT)
+    assert f"Repli du test H4 : {METHOD_INDEP}." in out.read_text(encoding="utf-8")
 
 
 def test_extra_sections_remplace_non_traitee(tmp_path: Path) -> None:
@@ -434,5 +546,5 @@ def test_rapport_utilise_le_choix_fourni(tmp_path: Path) -> None:
     write_report(bench(), out, model_label="m", negative_test=choice, n_boot=N_BOOT)
     text = out.read_text(encoding="utf-8")
     assert "`ic_non_overlap` (raison fixée)" in text
-    assert "11 items par bras, 7 répétitions" in text
-    assert "| `bootstrap_diff` | 0.90 | 0.00 |" in text
+    assert "11 items par bras communs aux bras" in text and "7 répétitions" in text
+    assert "| `bootstrap_diff` | 0.900 | 0.000 |" in text
