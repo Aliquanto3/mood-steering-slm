@@ -320,3 +320,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 06:40 · 5.1 · review · passe 2 : 1 medium corrigé (lecture H6 réalignée sur les IC appariés), doc seule, passe 3 inutile · 90ab1f2
 - 2026-11-05 06:40 · 5.1 · PR · ouverte · 90ab1f2
 - 2026-11-05 06:40 · report · rapport-verdict.md dit encore « H6/H2/H5 non traitées » (texte généré par run_bench) : à réaligner après 5.4 · —
+- 2026-11-05 06:42 · 5.1 · CI · verte · 90ab1f2
+- 2026-11-05 06:42 · 5.1 · fusion · #23 fusionnée, MERGED vérifié · 4719544

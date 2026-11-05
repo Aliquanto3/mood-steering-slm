@@ -63,7 +63,7 @@ development_status:
   epic-4-retrospective: optional
 
   epic-5: in-progress
-  5-1-pharmacocinétique-h6: in-progress
+  5-1-pharmacocinétique-h6: done
   5-2-effet-de-taille-h2: done
   5-3-frugalité-avec-codecarbon-h7: done
   5-4-axe-calme-agitation-h5: in-progress
