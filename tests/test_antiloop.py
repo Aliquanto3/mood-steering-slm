@@ -270,3 +270,60 @@ def test_run_arm_reecriture_atomique_via_part(tmp_path, monkeypatch):
     assert len(calls) == 1 and [r["item_id"] for r in recs] == ["q0", "q1"]
     assert len(path.read_text(encoding="utf-8").splitlines()) == 2
     assert not (tmp_path / "origin.jsonl.part").exists()
+
+
+def test_mcnemar_exact():
+    assert antiloop.mcnemar_exact(0, 0) == 1.0
+    assert antiloop.mcnemar_exact(5, 5) == 1.0
+    assert antiloop.mcnemar_exact(9, 1) == pytest.approx(0.021484375)  # 2 * 11/1024
+    assert antiloop.mcnemar_exact(8, 4) == pytest.approx(0.3876953125)
+    assert antiloop.mcnemar_exact(1, 9) == antiloop.mcnemar_exact(9, 1)
+
+
+def test_paired_report(tmp_path):
+    items = _items(4)
+
+    def write(name, truncs, outs):
+        rows = [
+            {"item_id": i.id, "output": o, "n_tokens": 1, "truncated": t}
+            for i, o, t in zip(items, outs, truncs, strict=True)
+        ]
+        (tmp_path / f"{name}.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8"
+        )
+
+    write("origin", [True, True, True, False], ["x", "x", "x", "B"])
+    write("ablation_a1", [False, False, True, False], ["B", "B", "x", "B"])
+    rep = antiloop.paired_report(tmp_path, items)
+    t = rep["truncated"]["ablation_a1"]
+    assert t["diff"] == 0.5
+    assert (t["only_reference"], t["only_arm"]) == (2, 0)
+    assert t["mcnemar_p"] == 0.5
+    a = rep["accuracy"]["ablation_a1"]
+    assert a["diff"] == -0.5
+    assert (a["only_reference"], a["only_arm"]) == (0, 2)
+    assert set(rep["truncated"]) == {"ablation_a1"}
+
+
+def _mmmlu_items(n):
+    return [
+        McqItem(f"mmmlu-fr:{i}", "Q ?", dict(zip("ABCD", "wxyz", strict=True)), "B", "s", "fr")
+        for i in range(n)
+    ]
+
+
+def test_main_report_refuse_items_d_une_autre_source(tmp_path, monkeypatch, capsys):
+    import mood_steering.eval.datasets as datasets
+
+    run_dir = tmp_path / "r"
+    run_dir.mkdir()
+    (run_dir / "config.json").write_text(
+        json.dumps({"n": 4, "item_sources": ["gmmlu-fr"]}), encoding="utf-8"
+    )
+    monkeypatch.setattr(antiloop, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(datasets, "load_global_mmlu_lite", lambda n: _mmmlu_items(n))
+    with pytest.raises(SystemExit):
+        antiloop.main(["--run-id", "r", "--report"])
+    err = capsys.readouterr().err
+    assert "mmmlu-fr" in err and "gmmlu-fr" in err
+    assert not (run_dir / "paired.json").exists()
