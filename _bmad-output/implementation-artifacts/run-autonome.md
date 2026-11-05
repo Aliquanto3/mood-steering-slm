@@ -228,3 +228,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:06 · 6.1 · second-avis · 0 high, 4 medium (tests torch hors CI, une direction pour deux couches |cos|=0,85, bf16, safetensors BF16), 1 low · —
 - 2026-11-05 02:06 · 6.1 · décision · job CI extras sur ubuntu ; directions par couche ; export des directions du MIT hors dépôt · —
 - 2026-11-05 02:06 · 6.1 · review · passe 1 lancée · —
+- 2026-11-05 02:09 · 2.3 · review · passe 1 : 2 high, 3 medium, 4 low corrigés + tampon cvec décalé corrigé (vérifié : texte identique au tampon complet du pic 1.4) ; set_cvec par pointeur numpy · 345927e
+- 2026-11-05 02:09 · 2.3 · PR · #15 ouverte · 345927e
+- 2026-11-05 02:09 · 2.3 · review · passe 2 lancée · —
