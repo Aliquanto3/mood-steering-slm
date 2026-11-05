@@ -273,3 +273,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 04:54 · 3.5 · review · passe 2 lancée (Opus) · —
 - 2026-11-05 04:57 · 3.5 · review · passe 2 : 1 medium corrigé (environnement de reprise vérifié seulement s'il reste à générer) ; passe 3 sautée, correctif de 11 lignes vérifié par l'orchestrateur · 66f2d0d
 - 2026-11-05 04:57 · 3.5 · PR · #19 ouverte · 66f2d0d
+- 2026-11-05 04:58 · 3.5 · CI · verte sur les six jobs · 66f2d0d
+- 2026-11-05 04:58 · 3.5 · fusion · #19 fusionnée, MERGED vérifié · 051c2ca
