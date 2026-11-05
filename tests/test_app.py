@@ -3,13 +3,23 @@
 import json
 import subprocess
 import sys
+import threading
+import time
 
+import anyio
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
 from mood_steering.steering import JOYFUL_SYSTEM_PROMPT, SAD_SYSTEM_PROMPT, Steerer
-from mood_steering_demo.app import ARM_LABELS, ARMS, create_app
+from mood_steering_demo.app import (
+    ARM_LABELS,
+    ARMS,
+    BUSY_MESSAGE,
+    MAX_PROMPT_CHARS,
+    MAX_TOKENS_LIMIT,
+    create_app,
+)
 
 N_EMBD, N_LAYER = 4, 6
 
@@ -23,6 +33,7 @@ class StreamBackend:
         self.systems = []
         self.resets = 0
         self.fail = False
+        self.texts = None
 
     def reset(self):
         self.resets += 1
@@ -35,6 +46,9 @@ class StreamBackend:
 
     def stream(self, prompt, system, max_tokens, seed):
         self.systems.append(system)
+        if self.texts is not None:
+            yield from self.texts
+            return
         tag = "v" if self.cvec is not None else "n"
         for i in range(min(max_tokens, 3)):
             if self.fail and i == 1:
@@ -162,6 +176,167 @@ def test_steerer_stream_et_open_stream():
     assert b.resets == 2
     with pytest.raises(ValueError):
         s.stream("q", 2.0)
+
+
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+def test_base_exception_signalee_au_bras():
+    client, backends = make(vec())
+
+    def interrupted(*a):
+        raise SystemExit(3)
+        yield
+
+    backends[2].stream = interrupted
+    evs = events(client)
+    err = [e for e in evs if e["type"] == "error"]
+    assert err == [{"type": "error", "arm": "steering", "message": "interrompu (SystemExit)"}]
+    assert evs[-1] == {"type": "done"}
+    assert events(client)[-1] == {"type": "done"}  # verrou rendu
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{"max_tokens": MAX_TOKENS_LIMIT + 1}, {"prompt": "a" * (MAX_PROMPT_CHARS + 1)}],
+)
+def test_bornes_max_422(params):
+    client, _ = make(vec())
+    r = client.get("/stream", params={"prompt": "a", **params})
+    assert r.status_code == 422
+
+
+def test_bornes_max_acceptees():
+    client, _ = make(vec())
+    evs = events(client, prompt="a" * MAX_PROMPT_CHARS, max_tokens=MAX_TOKENS_LIMIT)
+    assert evs[-1] == {"type": "done"}
+    cfg = client.get("/config").json()
+    assert (cfg["max_tokens_limit"], cfg["max_prompt_chars"]) == (512, 2000)
+    assert "mmap" in cfg["memory_note"]
+
+
+def test_separateurs_unicode_echappes():
+    client, backends = make(vec())
+    for b in backends:
+        b.texts = ["a b", "c d", "e\u0085f"]
+    with client.stream("GET", "/stream", params={"prompt": "x"}) as r:
+        raw = b"".join(r.iter_bytes()).decode("utf-8")
+    assert not any(c in raw for c in "  \u0085")
+    evs = [json.loads(ln[6:]) for ln in raw.split("\n") if ln]
+    toks = [e["text"] for e in evs if e["type"] == "token" and e["arm"] == "neutral"]
+    assert toks == ["a b", "c d", "e\u0085f"]
+
+
+class SlowBackend(StreamBackend):
+    """Produit des tokens sans fin (jusqu'à max_tokens), chacun après une courte pause."""
+
+    def __init__(self):
+        super().__init__()
+        self.started = threading.Event()
+        self.produced = 0
+        self.closed = False
+
+    def stream(self, prompt, system, max_tokens, seed):
+        self.started.set()
+        try:
+            for i in range(max_tokens):
+                time.sleep(0.01)
+                self.produced += 1
+                yield f"t{i}"
+        finally:
+            self.closed = True
+
+
+def make_slow():
+    backends = []
+
+    def factory():
+        b = SlowBackend()
+        backends.append(b)
+        return b
+
+    return create_app(factory, vector=vec()), backends
+
+
+def test_seconde_generation_409():
+    app, backends = make_slow()
+    first = {}
+
+    def run_first():
+        first["r"] = TestClient(app).get("/stream", params={"prompt": "a", "max_tokens": 60})
+
+    t = threading.Thread(target=run_first)
+    t.start()
+    assert all(b.started.wait(5) for b in backends)
+    r = TestClient(app).get("/stream", params={"prompt": "b"})
+    assert r.status_code == 409
+    assert r.json() == {"detail": BUSY_MESSAGE}
+    t.join(10)
+    assert first["r"].status_code == 200
+    assert first["r"].text.rstrip().endswith('data: {"type": "done"}')
+    # la génération finie, le serveur accepte de nouveau
+    assert (
+        TestClient(app).get("/stream", params={"prompt": "c", "max_tokens": 2}).status_code == 200
+    )
+
+
+async def _asgi_disconnect(app, query: str, spec_version: str, after_chunks: int):
+    """Client ASGI brut : se déconnecte après ``after_chunks`` morceaux du corps."""
+    got = []
+    disconnected = anyio.Event()
+    sent_request = False
+
+    async def receive():
+        nonlocal sent_request
+        if not sent_request:
+            sent_request = True
+            return {"type": "http.request", "body": b"", "more_body": False}
+        await disconnected.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        if message["type"] == "http.response.body" and message.get("body"):
+            if disconnected.is_set():
+                raise OSError("client parti")
+            got.append(message["body"])
+            if len(got) >= after_chunks:
+                disconnected.set()
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": spec_version},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/stream",
+        "raw_path": b"/stream",
+        "query_string": query.encode(),
+        "headers": [],
+        "client": ("127.0.0.1", 1),
+        "server": ("127.0.0.1", 80),
+        "root_path": "",
+    }
+    try:
+        await app(scope, receive, send)
+    except Exception:
+        pass  # ClientDisconnect en ASGI 2.4
+    return got
+
+
+@pytest.mark.parametrize("spec_version", ["2.3", "2.4"])
+def test_deconnexion_arrete_les_bras_et_rend_le_verrou(spec_version):
+    app, backends = make_slow()
+    got = anyio.run(_asgi_disconnect, app, "prompt=a&max_tokens=500", spec_version, 4)
+    assert got  # le flux a bien commencé
+    deadline = time.monotonic() + 5
+    client = TestClient(app)
+    while time.monotonic() < deadline:
+        r = client.get("/stream", params={"prompt": "b", "max_tokens": 1})
+        if r.status_code == 200:
+            break
+        time.sleep(0.05)
+    assert r.status_code == 200, "verrou non rendu après la déconnexion"
+    # arrêt coopératif : loin des 500 tokens demandés, générateurs du moteur fermés
+    assert all(b.produced < 200 for b in backends), [b.produced for b in backends]
+    assert all(b.closed for b in backends)
 
 
 def test_aucun_modele_charge():
