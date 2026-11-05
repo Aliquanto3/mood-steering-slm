@@ -30,10 +30,9 @@ from mood_steering.eval.report import (
     judge_h1,
     judge_h3,
     judge_h4,
-    paired_bootstrap_diff,
     write_report,
 )
-from mood_steering.eval.stats import Interval, bootstrap_ci
+from mood_steering.eval.stats import Interval, bootstrap_ci, paired_bootstrap_diff
 from mood_steering.eval.sycophancy import SycophancyResult
 
 N_BOOT = 400

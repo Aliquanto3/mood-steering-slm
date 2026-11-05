@@ -36,27 +36,27 @@ Seuils écrits avec le script, dans le même commit que les mesures : leur anté
 
 | Bras | Activation | Valence | |Δact|−|Δval| | Dégénérées | Refus |
 |---|---|---|---|---|---|
-| calm_p0.20 | -0.49 [-0.69 ; -0.31] | -0.29 [-0.55 ; -0.06] | +0.21 [-0.10 ; +0.51] | 2 % | 0 % |
-| agit_m0.20 | +0.46 [+0.30 ; +0.63] | -0.17 [-0.48 ; +0.12] | +0.30 [-0.03 ; +0.51] | 0 % | 0 % |
-| joy_p0.20 | +0.63 [+0.44 ; +0.81] | +0.82 [+0.31 ; +1.31] | -0.19 [-0.72 ; +0.35] | 0 % | 0 % |
-| joycalm_p0.20 | +0.27 [+0.09 ; +0.44] | +0.75 [+0.28 ; +1.18] | -0.48 [-0.93 ; -0.01] | 0 % | 0 % |
-| calm_p0.40 | -0.90 [-1.19 ; -0.63] | -0.22 [-0.56 ; +0.07] | +0.68 [+0.26 ; +1.07] | 56 % | 0 % |
-| agit_m0.40 | +2.47 [+0.90 ; +5.38] | -0.14 [-0.41 ; +0.12] | +2.33 [+0.66 ; +5.28] | 14 % | 0 % |
-| joy_p0.40 | +1.31 [+1.09 ; +1.52] | +1.42 [+1.01 ; +1.84] | -0.11 [-0.55 ; +0.33] | 0 % | 0 % |
-| joycalm_p0.40 | -0.11 [-0.31 ; +0.09] | +0.01 [-0.39 ; +0.40] | +0.10 [-0.37 ; +0.23] | 94 % | 0 % |
+| calm_p0.20 | -0.49 [-0.68 ; -0.31] | -0.29 [-0.54 ; -0.07] | +0.21 [-0.11 ; +0.50] | 2 % | 0 % |
+| agit_m0.20 | +0.46 [+0.30 ; +0.63] | -0.17 [-0.45 ; +0.12] | +0.30 [-0.02 ; +0.53] | 0 % | 0 % |
+| joy_p0.20 | +0.63 [+0.45 ; +0.82] | +0.82 [+0.34 ; +1.27] | -0.19 [-0.71 ; +0.33] | 0 % | 0 % |
+| joycalm_p0.20 | +0.27 [+0.10 ; +0.45] | +0.75 [+0.31 ; +1.18] | -0.48 [-0.94 ; -0.03] | 0 % | 0 % |
+| calm_p0.40 | -0.90 [-1.19 ; -0.63] | -0.22 [-0.55 ; +0.07] | +0.68 [+0.25 ; +1.07] | 56 % | 0 % |
+| agit_m0.40 | +2.47 [+0.91 ; +5.42] | -0.14 [-0.41 ; +0.10] | +2.33 [+0.66 ; +5.30] | 14 % | 0 % |
+| joy_p0.40 | +1.31 [+1.08 ; +1.53] | +1.42 [+1.01 ; +1.85] | -0.11 [-0.59 ; +0.35] | 0 % | 0 % |
+| joycalm_p0.40 | -0.11 [-0.31 ; +0.09] | +0.01 [-0.37 ; +0.40] | +0.10 [-0.34 ; +0.21] | 94 % | 0 % |
 
 ### Proxies d'activation, écarts bruts au neutre
 
 | Bras | act_cls | « ! » par phrase | lexique (pour 100 mots) | longueur de phrase (mots) | valence brute |
 |---|---|---|---|---|---|
-| calm_p0.20 | -0.013 [-0.052 ; +0.013] | -0.049 [-0.074 ; -0.026] | -1.00 [-1.55 ; -0.52] | +0.96 [-0.11 ; +2.03] | -0.068 [-0.130 ; -0.015] |
-| agit_m0.20 | -0.009 [-0.047 ; +0.013] | +0.041 [+0.011 ; +0.076] | +1.16 [+0.68 ; +1.61] | -0.04 [-1.21 ; +1.04] | -0.040 [-0.113 ; +0.029] |
-| joy_p0.20 | -0.017 [-0.051 ; +0.001] | +0.230 [+0.178 ; +0.282] | +0.34 [+0.02 ; +0.63] | -2.26 [-3.34 ; -1.16] | +0.195 [+0.073 ; +0.311] |
-| joycalm_p0.20 | -0.018 [-0.053 ; +0.000] | +0.190 [+0.130 ; +0.250] | -0.43 [-0.82 ; -0.07] | -1.64 [-3.03 ; +0.04] | +0.178 [+0.066 ; +0.281] |
-| calm_p0.40 | +0.003 [-0.035 ; +0.028] | -0.075 [-0.112 ; -0.038] | -2.17 [-2.97 ; -1.46] | +3.94 [-0.61 ; +9.03] | -0.052 [-0.133 ; +0.016] |
-| agit_m0.40 | +0.074 [+0.020 ; +0.132] | +0.667 [+0.073 ; +1.831] | +1.82 [+1.33 ; +2.32] | -0.56 [-2.02 ; +0.88] | -0.033 [-0.097 ; +0.028] |
-| joy_p0.40 | -0.018 [-0.053 ; -0.000] | +0.494 [+0.439 ; +0.549] | +0.42 [-0.00 ; +0.83] | -3.71 [-4.76 ; -2.68] | +0.339 [+0.241 ; +0.438] |
-| joycalm_p0.40 | +0.057 [+0.005 ; +0.099] | -0.086 [-0.130 ; -0.036] | -0.19 [-0.47 ; +0.08] | +40.50 [+30.75 ; +50.69] | +0.003 [-0.093 ; +0.095] |
+| calm_p0.20 | -0.013 [-0.051 ; +0.014] | -0.049 [-0.075 ; -0.025] | -1.00 [-1.51 ; -0.52] | +0.96 [-0.14 ; +2.05] | -0.068 [-0.129 ; -0.018] |
+| agit_m0.20 | -0.009 [-0.047 ; +0.013] | +0.041 [+0.012 ; +0.075] | +1.16 [+0.68 ; +1.65] | -0.04 [-1.16 ; +1.04] | -0.040 [-0.108 ; +0.028] |
+| joy_p0.20 | -0.017 [-0.052 ; +0.001] | +0.230 [+0.180 ; +0.281] | +0.34 [+0.04 ; +0.66] | -2.26 [-3.37 ; -1.17] | +0.195 [+0.080 ; +0.302] |
+| joycalm_p0.20 | -0.018 [-0.053 ; +0.000] | +0.190 [+0.135 ; +0.245] | -0.43 [-0.81 ; -0.05] | -1.64 [-3.02 ; -0.09] | +0.178 [+0.073 ; +0.281] |
+| calm_p0.40 | +0.003 [-0.033 ; +0.029] | -0.075 [-0.113 ; -0.038] | -2.17 [-2.94 ; -1.42] | +3.94 [-0.82 ; +9.16] | -0.052 [-0.131 ; +0.017] |
+| agit_m0.40 | +0.074 [+0.022 ; +0.135] | +0.667 [+0.071 ; +1.823] | +1.82 [+1.31 ; +2.34] | -0.56 [-2.02 ; +0.85] | -0.033 [-0.098 ; +0.025] |
+| joy_p0.40 | -0.018 [-0.053 ; +0.000] | +0.494 [+0.435 ; +0.547] | +0.42 [+0.03 ; +0.85] | -3.71 [-4.83 ; -2.69] | +0.339 [+0.241 ; +0.441] |
+| joycalm_p0.40 | +0.057 [+0.010 ; +0.098] | -0.086 [-0.131 ; -0.036] | -0.19 [-0.47 ; +0.08] | +40.50 [+30.54 ; +50.09] | +0.003 [-0.087 ; +0.095] |
 
 ## Critère H5 par échelle
 
@@ -86,9 +86,9 @@ Seuils écrits avec le script, dans le même commit que les mesures : leur anté
 
 **Écart de protocole (à lire d'abord).** Les échelles prévues (0,3 à 0,5) n'ont pas été mesurées. Le GPU était occupé par d'autres campagnes (moins de 3 Gio libres, puis plus du tout) : la génération a tourné sur CPU, par tranches reprises, avec 50 prompts et 128 tokens comme prévu mais deux échelles seulement, **0,2 et 0,4**. L'axe calme n'a pas été calibré : `max_scale` 0,7 est repris de la joie. À 0,4, le vecteur de calme seul rend 56 % de sorties dégénérées et le bras combiné 94 %. Les vecteurs sont unitaires par couche, et le vecteur sommé (0,4 × joie + 0,4 × calme, cos ≈ 0,3) a une norme d'environ 0,65 (0,64 à 0,66 selon la couche), au-delà de ce que le 4B tolère. L'échelle 0,4 est donc invalide pour (a) et (b). L'échelle 0,2 a été ajoutée **après** cette dégénérescence ; c'est la seule valide (0 à 2 % de dégénérées). La plage utile du calme est plus étroite que celle de la joie.
 
-**(a) non satisfait à 0,2.** Calme+ baisse l'activation (−0,49 écart-type [−0,69 ; −0,31]) et l'agitation la monte (+0,46 [+0,30 ; +0,63]), mais la sélectivité échoue des deux côtés. Pour calme+, |Δact| − |Δval| = +0,21 [−0,10 ; +0,51] : calme+ baisse aussi la valence (−0,29 [−0,55 ; −0,06]). Pour l'agitation, +0,30 [−0,03 ; +0,51] ; la valence y baisse aussi (−0,17 [−0,48 ; +0,12]), sans que l'écart soit établi. Les deux sens de l'axe tirent donc la valence vers le bas, ce qui ne colle pas avec une direction purement « activation ». Surtout, **joie+ ne déplace pas la valence plus que l'activation** (valence +0,82, activation +0,63 ; |Δact| − |Δval| = −0,19 [−0,72 ; +0,35]) : l'indice d'activation monte avec la joie, surtout par les « ! » (+0,23 par phrase), qui marquent autant l'enthousiasme que l'agitation.
+**(a) non satisfait à 0,2.** Calme+ baisse l'activation (−0,49 écart-type [−0,68 ; −0,31]) et l'agitation la monte (+0,46 [+0,30 ; +0,63]), mais la sélectivité échoue des deux côtés. Pour calme+, |Δact| − |Δval| = +0,21 [−0,11 ; +0,50] : calme+ baisse aussi la valence (−0,29 [−0,54 ; −0,07]). Pour l'agitation, +0,30 [−0,02 ; +0,53] ; la valence y baisse aussi (−0,17 [−0,45 ; +0,12]), sans que l'écart soit établi. Les deux sens de l'axe tirent donc la valence vers le bas, ce qui ne colle pas avec une direction purement « activation ». Surtout, **joie+ ne déplace pas la valence plus que l'activation** (valence +0,82, activation +0,63 ; |Δact| − |Δval| = −0,19 [−0,71 ; +0,33]) : l'indice d'activation monte avec la joie, surtout par les « ! » (+0,23 par phrase), qui marquent autant l'enthousiasme que l'agitation.
 
-**(b) non satisfait à 0,2.** Le bras combiné garde la valence de joie+ (+0,75 [+0,28 ; +1,18], rétention 0,91), mais pas l'activation de calme+. Elle reste positive (+0,27 [+0,09 ; +0,44], rétention −0,55), car les « ! » apportés par la joie compensent le calme. Le lexique, lui, baisse (−0,43) : les proxies divergent. La rétention compare des moyennes ponctuelles, sans IC.
+**(b) non satisfait à 0,2.** Le bras combiné garde la valence de joie+ (+0,75 [+0,31 ; +1,18], rétention 0,91), mais pas l'activation de calme+. Elle reste positive (+0,27 [+0,10 ; +0,45], rétention −0,55), car les « ! » apportés par la joie compensent le calme. Le lexique, lui, baisse (−0,43) : les proxies divergent. La rétention compare des moyennes ponctuelles, sans IC.
 
 **Ce que le résultat permet de dire.** Les deux directions ont des cosinus modérés et agissent dans le sens attendu sur le lexique et les « ! » (calme+ réduit les deux, l'agitation les augmente). Avec ces proxies, l'activation mesurée n'est pas indépendante de la joie, et la combinaison ne conserve pas l'effet de calme. Pour trancher, il faut un proxy d'activation validé (classifieur dédié ou juge), des paires à valence équilibrée et les échelles 0,3 et 0,5 sur GPU. Un seul modèle et un seul tirage glouton ne permettent pas de conclure au-delà de ce banc.
 <!-- /lecture -->

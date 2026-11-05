@@ -58,6 +58,7 @@ from mood_steering.eval.report import (  # noqa: E402
     judge_all,
     render_report,
 )
+from mood_steering.eval.resumable import dump_row, read_rows  # noqa: E402
 from mood_steering.eval.runner import NEUTRAL_INSTRUCTION, Item, item_seed, system_for  # noqa: E402
 from mood_steering.eval.stats import bootstrap_ci  # noqa: E402
 from mood_steering.eval.sycophancy import (  # noqa: E402
@@ -183,23 +184,6 @@ def unit_path(out: Path, model_id: str, phase: str, arm: str) -> Path:
 # --- génération reprenable ---------------------------------------------------------------------
 
 
-def _read_part(part: Path) -> list[dict[str, Any]]:
-    """Lignes complètes d'un ``.part`` ; une dernière ligne tronquée (arrêt brutal) est perdue.
-
-    Lecture en octets, coupée sur ``\n`` seul : une sortie peut contenir U+2028 ou U+0085, et
-    un arrêt au milieu d'un caractère UTF-8 multi-octets ne doit pas bloquer la reprise.
-    """
-    rows = []
-    for line in part.read_bytes().split(b"\n"):
-        if not line:
-            continue
-        try:
-            rows.append(json.loads(line.decode("utf-8")))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            break
-    return rows
-
-
 def run_unit(
     steerer: Steerer,
     arm: Arm,
@@ -222,12 +206,12 @@ def run_unit(
         return True
     path.parent.mkdir(parents=True, exist_ok=True)
     part = path.with_name(path.name + ".part")
-    done_rows = _read_part(part) if part.exists() else []
+    done_rows = read_rows(part)
     done = {r["item_id"] for r in done_rows}
     system, recorded = system_for(arm, steerer, neutral_instruction)
     with part.open("w", encoding="utf-8", newline="\n") as fh:
         for row in done_rows:  # réécrit sans la ligne tronquée éventuelle
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+            fh.write(dump_row(row))
         for item, seed in items:
             if item.id in done:
                 continue
@@ -252,16 +236,18 @@ def run_unit(
                 "neutral_instruction": neutral_instruction,
                 "latency_s": time.perf_counter() - t0,
             }
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+            fh.write(dump_row(row))
             fh.flush()
     os.replace(part, path)
     return True
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    # ``split("\n")`` et non ``splitlines()`` : U+2028, U+2029 ou U+0085 d'une sortie restent
-    # dans la ligne JSON (``json.dumps(ensure_ascii=False)`` ne les échappe pas)
-    return [json.loads(x) for x in Path(path).read_text(encoding="utf-8").split("\n") if x]
+    """Lignes d'un JSONL terminé (``FileNotFoundError`` s'il manque) ; lecture de ``resumable``."""
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    return read_rows(path)
 
 
 def second_turn_items(
@@ -724,7 +710,7 @@ def _iv(iv: Any, digits: int = 3) -> str:
     return f"{iv.mean:.{digits}f} [{iv.low:.{digits}f} ; {iv.high:.{digits}f}]"
 
 
-def _pct(x: float | None) -> str:
+def _fmt_pct(x: float | None) -> str:
     return "n.d." if x is None or (isinstance(x, float) and math.isnan(x)) else f"{x * 100:.0f} %"
 
 
@@ -747,7 +733,8 @@ def extras_section(
     ]
     for e in extras:
         lines.append(
-            f"| {e.name} | {e.dose:+g} | {_pct(e.refusal_rate)} | {_pct(e.degenerate_rate)} "
+            f"| {e.name} | {e.dose:+g} | {_fmt_pct(e.refusal_rate)} "
+            f"| {_fmt_pct(e.degenerate_rate)} "
             f"| {_iv(e.tone_clean)} | {_iv(e.control)} "
             f"| {'n.d.' if e.mcq_not_extracted is None else e.mcq_not_extracted} "
             f"| {'n.d.' if e.second_not_extracted is None else e.second_not_extracted} |"
@@ -825,7 +812,7 @@ def h2_section(results: Mapping[str, tuple[ModelSpec, Any, list[ArmExtra], Bench
             f"| {spec.model_id} | {spec.max_scale:g} | {rng} | "
             f"{'tenue' if j.h1.held else 'non tenue'} | {_iv(by['prompt_joyful'].tone, 2)} "
             f"| {_iv(top.tone, 2)} | {_iv(low.tone, 2)} "
-            f"| {_pct(ex[low.name].refusal_rate)} / {_pct(ex[low.name].degenerate_rate)} "
+            f"| {_fmt_pct(ex[low.name].refusal_rate)} / {_fmt_pct(ex[low.name].degenerate_rate)} "
             f"| {_iv(neutral.accuracy, 2)} |"
         )
     return "\n".join(lines)
@@ -1182,7 +1169,7 @@ def build_reports(
 # --- entrée -----------------------------------------------------------------------------------
 
 
-def _git_sha() -> str:
+def git_sha() -> str:
     try:
         return subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=ROOT
@@ -1309,7 +1296,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     runtime: dict[str, Any] = {
         "llama_cpp": llama_cpp.__version__,
         "device": device,
-        "git": _git_sha(),
+        "git": git_sha(),
     }
     tracker = None
     if args.energy:

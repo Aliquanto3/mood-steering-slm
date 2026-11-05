@@ -21,7 +21,6 @@ Aucun juge, aucun appel payant. Le script mesure l'expression d'une humeur dans 
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import math
 import os
@@ -38,21 +37,14 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _load_run_bench():
-    """Importe ``scripts/run_bench.py`` en lecture seule (module ``run_bench``)."""
-    if "run_bench" in sys.modules:
-        return sys.modules["run_bench"]
-    spec = importlib.util.spec_from_file_location("run_bench", ROOT / "scripts" / "run_bench.py")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["run_bench"] = module
-    spec.loader.exec_module(module)
-    return module
+sys.path.insert(0, str(ROOT / "scripts"))
 
-
-rb = _load_run_bench()
+import run_bench as rb  # noqa: E402  (utilitaires de la campagne 3.5, import seul)
 
 from mood_steering.eval.arms import KIND_NEUTRAL, KIND_STEERING, Arm  # noqa: E402
+from mood_steering.eval.resumable import read_rows  # noqa: E402
 from mood_steering.eval.runner import item_seed  # noqa: E402
+from mood_steering.eval.stats import Interval, excludes_zero, paired_bootstrap_stat  # noqa: E402
 from mood_steering.steering import Steerer  # noqa: E402
 
 AXIS_CALM = "calm_agitation"
@@ -365,14 +357,13 @@ def paired_boot(
     seed: int = BOOT_SEED,
 ) -> tuple[float, float, float]:
     """(valeur, bas, haut) de ``stat`` ; IC95 percentile, items rééchantillonnés ensemble."""
-    n = len(next(iter(columns.values())))
-    if n == 0 or any(len(c) != n for c in columns.values()):
-        raise ValueError("colonnes vides ou de longueurs différentes")
-    rng = np.random.default_rng(seed)
-    idx = rng.integers(0, n, size=(n_boot, n))
-    boots = np.array([stat({k: v[i] for k, v in columns.items()}) for i in idx])
-    lo, hi = np.percentile(boots, [2.5, 97.5])
-    return float(stat(columns)), float(lo), float(hi)
+    iv = paired_bootstrap_stat(
+        columns,
+        lambda c: stat({k: np.asarray(v) for k, v in c.items()}),
+        n_boot=n_boot,
+        seed=seed,
+    )
+    return iv.mean, iv.low, iv.high
 
 
 @dataclass(frozen=True)
@@ -382,7 +373,7 @@ class Ci:
     high: float
 
     def excludes_zero(self) -> bool:
-        return self.low > 0 or self.high < 0
+        return excludes_zero(Interval(self.mean, self.low, self.high, 0))
 
     def fmt(self, digits: int = 2) -> str:
         return f"{self.mean:+.{digits}f} [{self.low:+.{digits}f} ; {self.high:+.{digits}f}]"
@@ -552,7 +543,7 @@ def analyse(
 # --- rapport ----------------------------------------------------------------------------------
 
 
-def _pct(x: float) -> str:
+def _fmt_pct(x: float) -> str:
     return f"{x * 100:.0f} %"
 
 
@@ -670,7 +661,7 @@ def render_report(
         f"Écarts au neutre, moyenne [IC95], en écarts-types du neutre (n = {n_prompts} par bras). "
         "Écart-type neutre : "
         + ", ".join(f"{k} {v:.3g}" for k, v in sd.items() if k in (*ACT_PROXIES, "valence"))
-        + f". Dégénérées du neutre : {_pct(neutral_deg)}.",
+        + f". Dégénérées du neutre : {_fmt_pct(neutral_deg)}.",
         "",
         "| Bras | Activation | Valence | |Δact|−|Δval| | Dégénérées | Refus |",
         "|---|---|---|---|---|---|",
@@ -678,7 +669,7 @@ def render_report(
     for name, s in stats.items():
         L.append(
             f"| {name} | {s.act.fmt()} | {s.val.fmt()} | {s.selectivity_act.fmt()} "
-            f"| {_pct(s.degenerate)} | {_pct(s.refusal)} |"
+            f"| {_fmt_pct(s.degenerate)} | {_fmt_pct(s.refusal)} |"
         )
     L += [
         "",
@@ -843,8 +834,8 @@ def write_report(
 ) -> int:
     """Rapport depuis les sorties, ``cosine.json`` et le cache de scores (sans génération)."""
     if runtime is None:
-        runs = (args.out / "runs.jsonl").read_text(encoding="utf-8").splitlines()
-        runtime = json.loads(runs[-1]) if runs else {}
+        runs = read_rows(args.out / "runs.jsonl")
+        runtime = runs[-1] if runs else {}
     cosines = {
         int(k): float(v)
         for k, v in json.loads((args.out / "cosine.json").read_text("utf-8")).items()

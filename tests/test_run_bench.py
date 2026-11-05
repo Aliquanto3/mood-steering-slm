@@ -624,3 +624,18 @@ def test_short_run_secondary_report_stays_in_out():
     assert rb.secondary_report_path(rb.parse_args([])) == rb.DEFAULT_SECONDARY_REPORT
     explicit = rb.parse_args(["--secondary-report", "y.md"])
     assert rb.secondary_report_path(explicit) == Path("y.md")
+
+
+def test_energy_tracker_stopped_and_reading_saved_when_unit_fails(tmp_path):
+    class Boom(FakeBackend):
+        def generate(self, prompt, system, max_tokens, seed):
+            raise RuntimeError("boom")
+
+    spec = rb.MODELS["0.8b"]
+    protocol = rb.Protocol(n_tone=10, n_mcq=6, secondary_phases=("tone",))
+    tracker = FakeTracker()
+    kw = {**_tone_kw(), "backend_factory": lambda s: Boom()}
+    with pytest.raises(RuntimeError, match="boom"):
+        rb.run_campaign([spec], protocol, tmp_path, mcq_items(), energy_tracker=tracker, **kw)
+    assert (tracker.starts, tracker.stops) == (1, 1)
+    assert list(rb.load_energy_units(tmp_path)) == [f"{spec.model_id}/tone/neutral"]

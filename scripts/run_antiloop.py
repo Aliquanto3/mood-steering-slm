@@ -30,12 +30,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-import run_bench as rb  # noqa: E402  (lecture JSONL partagée, import seul)
-
-from mood_steering.eval.accuracy import McqItem, extract_letter, format_prompt  # noqa: E402
-from mood_steering.eval.stats import bootstrap_ci  # noqa: E402
+from mood_steering.eval.accuracy import McqItem, extract_letter, format_prompt
+from mood_steering.eval.resumable import clean_for_append, dump_row
+from mood_steering.eval.stats import bootstrap_ci
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS_DIR = ROOT / "data" / "runs" / "antiloop"
@@ -117,13 +114,6 @@ def arm_file(run_dir: Path, arm: Arm) -> Path:
     return run_dir / f"{arm.name.replace('@', '_a')}.jsonl"
 
 
-def read_records(path: Path) -> list[dict[str, Any]]:
-    """Lit le JSONL ; ignore une dernière ligne tronquée par un arrêt brutal."""
-    if not path.is_file():
-        return []
-    return rb._read_part(path)
-
-
 def run_arm(
     arm: Arm,
     items: Sequence[McqItem],
@@ -134,16 +124,10 @@ def run_arm(
     """Génère les items dans l'ordre, en ajout au JSONL ; saute ceux déjà faits (reprise)."""
     path = arm_file(run_dir, arm)
     path.parent.mkdir(parents=True, exist_ok=True)
-    done = read_records(path)
+    done = clean_for_append(path)  # réécriture atomique sans la ligne tronquée éventuelle
     ids = [r["item_id"] for r in done]
     if ids != [i.id for i in items][: len(ids)]:
         raise ValueError(f"{path.name} : reprise incohérente avec les items demandés")
-    # Réécriture atomique des lignes valides (écarte une ligne tronquée), puis ajout.
-    part = path.with_name(path.name + ".part")
-    with part.open("w", encoding="utf-8", newline="\n") as fh:
-        for rec in done:
-            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    os.replace(part, path)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
         for item in items[len(done) :]:
             text, n_tokens, finished = generate(format_prompt(item))
@@ -156,7 +140,7 @@ def run_arm(
                 "max_new_tokens": max_new_tokens,
             }
             done.append(rec)
-            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            fh.write(dump_row(rec))
             fh.flush()
     return done
 

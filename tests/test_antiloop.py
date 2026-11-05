@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from mood_steering.eval.accuracy import McqItem
+from mood_steering.eval.resumable import read_rows
 
 _SPEC = importlib.util.spec_from_file_location(
     "run_antiloop", Path(__file__).resolve().parents[1] / "scripts" / "run_antiloop.py"
@@ -237,13 +238,13 @@ def test_run_arm_reprise_avec_separateurs_unicode(tmp_path):
     first = [_rec("q0", "a b c"), _rec("q1", "x\u0085y")]
     raw = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in first)
     path.write_bytes(raw.encode("utf-8"))
-    assert antiloop.read_records(path) == first
+    assert read_rows(path) == first
     calls: list[str] = []
     recs = antiloop.run_arm(arm, items, _fake(calls), tmp_path, 32)
     assert len(calls) == 1  # seul q2 est généré
     assert recs[:2] == first
     assert path.read_bytes().startswith(raw.encode("utf-8"))
-    assert antiloop.read_records(path) == recs
+    assert read_rows(path) == recs
 
 
 def test_run_arm_reecriture_atomique_via_part(tmp_path, monkeypatch):

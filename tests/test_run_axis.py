@@ -437,3 +437,17 @@ def test_render_report_inconclusive_when_distinct_but_criteria_fail():
         extracts={},
     )  # fmt: skip
     assert "Verdict H5 : non concluante" in md
+
+
+def test_paired_boot_and_ci_use_shared_stats():
+    from mood_steering.eval.stats import Interval, excludes_zero, paired_bootstrap_stat
+
+    x = np.arange(20, dtype=float)
+    cols = {"x": x}
+    stat = lambda c: float(c["x"].mean())  # noqa: E731
+    iv = paired_bootstrap_stat(cols, lambda c: float(np.mean(c["x"])), n_boot=300, seed=1)
+    assert ra.paired_boot(cols, stat, n_boot=300, seed=1) == (iv.mean, iv.low, iv.high)
+    ci = ra.Ci(*ra.paired_boot(cols, stat, n_boot=300, seed=1))
+    assert ci.excludes_zero() == excludes_zero(Interval(ci.mean, ci.low, ci.high, 20)) is True
+    assert not ra.Ci(0.0, -0.1, 0.2).excludes_zero()
+    assert ra.Ci(-1.0, -2.0, -0.5).excludes_zero()
