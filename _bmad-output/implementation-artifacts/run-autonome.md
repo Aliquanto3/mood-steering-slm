@@ -331,3 +331,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 07:43 · 6.2 · PR · #24 ouverte · 544bea7
 - 2026-11-05 07:44 · 5.4 · second-avis · 0 high, 3 medium (valence des paires agitées, critères non pré-enregistrés et calme non calibré, verdict sur proxy non validé), 7 low · 86d1b15
 - 2026-11-05 07:44 · 5.4 · review · passe 1 lancée (Opus, merge origin/main d'abord) · —
+- 2026-11-05 07:45 · 6.2 · CI · verte (6 jobs) · 544bea7
+- 2026-11-05 07:45 · 6.2 · fusion · #24 fusionnée, MERGED vérifié · 5139f48
+- 2026-11-05 07:45 · 6.2 · report · relance à plafond 2048/4096 sur n réduit ; contrôle croisé slm-quality-bench · —
