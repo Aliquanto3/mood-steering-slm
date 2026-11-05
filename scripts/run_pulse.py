@@ -655,6 +655,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     runtime_file = args.out / "runtime.json"
     if runtime_file.exists():
         runtime.update(json.loads(runtime_file.read_text(encoding="utf-8")))
+        runtime["git"] = rb._git_sha()  # commit du rapport (une reprise peut changer de commit)
     # device des sorties déjà écrites sans champ ``device`` : celui du premier lancement
     runtime.setdefault("first_device", runtime["device"])
     if not is_complete(args.out, cfg, args.subset):
