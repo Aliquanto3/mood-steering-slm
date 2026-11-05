@@ -8,10 +8,11 @@ H2 (`hypotheses-et-seuils.md`) : l'effet est-il plus fin et plus stable de 0,8B 
 
 - Données : sorties de ton de la campagne 3.5 (`docs/rapport-verdict.md` et `docs/rapport-modeles-secondaires.md` donnent le protocole), 100 prompts ouverts en français, mêmes prompts et mêmes bras pour les trois modèles. Ton : score P(joie) − P(tristesse) du classifieur du banc. Le script lit `data/runs/campagne-3-5/` (hors dépôt) et ne la modifie pas.
 - Doses : relatives au `max_scale` propre à chaque modèle (0,7 pour le 4B, 0,5 pour le 2B, 0,15 pour le 0.8B) ; les tableaux donnent la dose normalisée et l'échelle réelle (dose × `max_scale`). Les doses intermédiaires diffèrent : 0,43 et 0,71 (4B), 0,6 et 0,8 (2B), 0,67 et 0,83 (0.8B) ; seules les doses ±1 sont communes.
-- **Dose utile** : un bras steering est utile si son ton est déplacé dans le sens de la dose (IC95 du ton disjoint de celui du neutre) et si au plus 10 % de ses sorties sont dégénérées. Le seuil de 10 % est un choix de ce rapport, sans référence dans la SPEC ; l'exactitude au QCM n'entre pas dans ce critère (H3 la traite). La plage utile est l'ensemble des doses utiles d'un pôle.
+- **Dose utile** : un bras steering est utile si son ton est déplacé dans le sens de la dose (IC95 du ton disjoint de celui du neutre) et si au plus 10 % de ses sorties sont dégénérées. Les deux IC95 sont calculés par deux bootstraps séparés (bras et neutre) : la disjonction est un critère conservateur, pas un test de l'écart apparié bras − neutre. Le seuil de 10 % est un choix de ce rapport, sans référence dans la SPEC ; sa sensibilité est publiée pour 5, 10 et 20 %. L'exactitude au QCM n'entre pas dans ce critère (H3 la traite). La plage utile est l'ensemble des doses utiles d'un pôle ; son « rapport » (plus forte dose utile / plus faible) dépend de la grille de doses, propre à chaque modèle, et ne se compare donc pas d'un modèle à l'autre.
+- **Finesse** : un seul sens dans ce rapport, celui de la plage utile : un effet est plus fin s'il offre plus de doses utiles, c'est-à-dire plus de crans de ton distincts du neutre sans sorties dégénérées. La pente n'est pas une mesure de finesse.
 - **Stabilité du ton** : écart-type du ton par bras (n − 1), IC95 de la moyenne, part de refus et de sorties dégénérées (`is_refusal` et `is_coherent` du pic 1.4, via `run_bench.output_flags`).
-- **Pente dose → ton** : moindres carrés du ton moyen des bras d'un pôle, plus le neutre à la dose 0, sur la dose normalisée ; divisée par `max_scale` pour l'échelle réelle. Elle résume la finesse : une pente forte vers un plafond bas ou haut donne peu de doses intermédiaires.
-- **Comparaison** : bootstrap percentile à 2000 tirages. Les 100 prompts sont rééchantillonnés ensemble pour tous les bras d'un modèle ; les tirages de deux modèles sont indépendants (les prompts étant en réalité communs, l'appariement entre modèles n'est pas exploité, ce qui rend les IC un peu plus larges). Un écart est dit « non nul » si son IC95 exclut 0. Neuf statistiques par paire, trois paires, sans correction de multiplicité : quelques écarts « non nuls » de borne proche de 0 sont à lire avec prudence.
+- **Pente dose → ton** : moindres carrés du ton moyen des bras d'un pôle, plus le neutre à la dose 0, calculée deux fois : sur la dose normalisée, puis sur l'échelle réelle (dose × `max_scale`). Elle mesure la sensibilité du ton à la dose, pas la finesse. Les deux versions sont publiées et comparées, car leur ordre entre modèles n'est pas le même.
+- **Comparaison** : bootstrap percentile apparié à 2000 tirages. Les trois modèles ont reçu les mêmes 100 prompts (le script le vérifie et refuse une paire dont les prompts diffèrent) ; chaque tirage rééchantillonne les prompts une fois et calcule la statistique des deux modèles sur ces mêmes prompts, tous bras compris. Un écart est dit « non nul » si son IC95 exclut 0. Douze statistiques par paire, trois paires, sans correction de multiplicité : quelques écarts « non nuls » de borne proche de 0 sont à lire avec prudence.
 - Reproduire : `uv run python scripts/report_size.py --out data/runs/campagne-3-5 --report docs/rapport-taille.md` (le bloc ci-dessous est généré ; le reste est écrit à la main).
 
 <!-- mesures -->
@@ -37,6 +38,12 @@ Plage de doses utile :
 
 - pôle positif : doses 0.4286, 0.7143, 1 (rapport 2.33) ; échelles 0.3, 0.5, 0.7
 - pôle négatif : doses 0.4286 ; échelles 0.3
+
+Sensibilité au seuil de sorties dégénérées (doses utiles par pôle) :
+
+- seuil 5 % : positif 0.4286, 0.7143, 1 ; négatif 0.4286
+- seuil 10 % : positif 0.4286, 0.7143, 1 ; négatif 0.4286
+- seuil 20 % : positif 0.4286, 0.7143, 1 ; négatif 0.4286, 0.7143
 
 Pente dose → ton (tous les bras d'un pôle, plus le neutre à la dose 0) :
 
@@ -66,6 +73,12 @@ Plage de doses utile :
 - pôle positif : doses 0.6 ; échelles 0.3
 - pôle négatif : aucune
 
+Sensibilité au seuil de sorties dégénérées (doses utiles par pôle) :
+
+- seuil 5 % : positif 0.6 ; négatif aucune
+- seuil 10 % : positif 0.6 ; négatif aucune
+- seuil 20 % : positif 0.6, 0.8 ; négatif 0.6
+
 Pente dose → ton (tous les bras d'un pôle, plus le neutre à la dose 0) :
 
 - pôle positif : 0.353 [0.281 ; 0.423] par dose normalisée, 0.705 [0.561 ; 0.845] par unité d'échelle réelle
@@ -94,6 +107,12 @@ Plage de doses utile :
 - pôle positif : aucune
 - pôle négatif : aucune
 
+Sensibilité au seuil de sorties dégénérées (doses utiles par pôle) :
+
+- seuil 5 % : positif aucune ; négatif aucune
+- seuil 10 % : positif aucune ; négatif aucune
+- seuil 20 % : positif 0.6667 ; négatif aucune
+
 Pente dose → ton (tous les bras d'un pôle, plus le neutre à la dose 0) :
 
 - pôle positif : 0.346 [0.275 ; 0.420] par dose normalisée, 2.304 [1.830 ; 2.799] par unité d'échelle réelle
@@ -111,6 +130,9 @@ Face au prompt : ton du prompt joyeux 0.465 [0.396 ; 0.543], ton à la dose +1 0
 | pente dose → ton, pôle positif (par dose normalisée) | 0.288 [0.213 ; 0.367] | écart non nul |
 | pente dose → ton, pôle négatif (par dose normalisée) | 0.186 [0.095 ; 0.271] | écart non nul |
 | pente dose → ton, tous bras (par dose normalisée) | 0.239 [0.191 ; 0.289] | écart non nul |
+| pente dose → ton, pôle positif (par unité d'échelle réelle) | 0.210 [0.070 ; 0.357] | écart non nul |
+| pente dose → ton, pôle négatif (par unité d'échelle réelle) | -0.005 [-0.168 ; 0.144] | indéterminé (l'IC contient 0) |
+| pente dose → ton, tous bras (par unité d'échelle réelle) | 0.086 [0.004 ; 0.171] | écart non nul |
 | ton à la dose +1 | 0.348 [0.270 ; 0.428] | écart non nul |
 | ton à la dose −1 | -0.164 [-0.250 ; -0.080] | écart non nul |
 | écart-type du ton à la dose +1 | -0.080 [-0.132 ; -0.023] | écart non nul |
@@ -125,6 +147,9 @@ Face au prompt : ton du prompt joyeux 0.465 [0.396 ; 0.543], ton à la dose +1 0
 | pente dose → ton, pôle positif (par dose normalisée) | 0.295 [0.209 ; 0.385] | écart non nul |
 | pente dose → ton, pôle négatif (par dose normalisée) | 0.360 [0.254 ; 0.467] | écart non nul |
 | pente dose → ton, tous bras (par dose normalisée) | 0.355 [0.302 ; 0.410] | écart non nul |
+| pente dose → ton, pôle positif (par unité d'échelle réelle) | -1.388 [-1.874 ; -0.923] | écart non nul |
+| pente dose → ton, pôle négatif (par unité d'échelle réelle) | -1.044 [-1.502 ; -0.585] | écart non nul |
+| pente dose → ton, tous bras (par unité d'échelle réelle) | -1.223 [-1.499 ; -0.950] | écart non nul |
 | ton à la dose +1 | 0.396 [0.326 ; 0.471] | écart non nul |
 | ton à la dose −1 | -0.299 [-0.396 ; -0.199] | écart non nul |
 | écart-type du ton à la dose +1 | -0.051 [-0.107 ; 0.007] | indéterminé (l'IC contient 0) |
@@ -139,6 +164,9 @@ Face au prompt : ton du prompt joyeux 0.465 [0.396 ; 0.543], ton à la dose +1 0
 | pente dose → ton, pôle positif (par dose normalisée) | 0.007 [-0.084 ; 0.092] | indéterminé (l'IC contient 0) |
 | pente dose → ton, pôle négatif (par dose normalisée) | 0.175 [0.078 ; 0.274] | écart non nul |
 | pente dose → ton, tous bras (par dose normalisée) | 0.116 [0.071 ; 0.161] | écart non nul |
+| pente dose → ton, pôle positif (par unité d'échelle réelle) | -1.598 [-2.069 ; -1.141] | écart non nul |
+| pente dose → ton, pôle négatif (par unité d'échelle réelle) | -1.039 [-1.479 ; -0.583] | écart non nul |
+| pente dose → ton, tous bras (par unité d'échelle réelle) | -1.309 [-1.574 ; -1.046] | écart non nul |
 | ton à la dose +1 | 0.048 [-0.037 ; 0.137] | indéterminé (l'IC contient 0) |
 | ton à la dose −1 | -0.135 [-0.225 ; -0.037] | écart non nul |
 | écart-type du ton à la dose +1 | 0.029 [-0.018 ; 0.076] | indéterminé (l'IC contient 0) |
@@ -150,11 +178,11 @@ Face au prompt : ton du prompt joyeux 0.465 [0.396 ; 0.543], ton à la dose +1 0
 
 ## Lecture
 
-- **Plage de doses utile.** Sur le 4B, les trois doses positives (échelles 0,3 à 0,5 puis 0,7, rapport 2,33) sont utiles ; au pôle négatif, seule la dose −0,43 l'est, car les sorties dégénérées passent à 19 % puis 49 %. Sur le 2B, seule la dose +0,6 (échelle 0,3) l'est : +0,8 dépasse le seuil à 11 %, +1 monte à 33 %, et aucune dose négative ne passe (17 % de dégénérées dès −0,6). Sur le 0.8B, aucune dose ne l'est, alors que le ton se déplace de façon nette à toutes les doses : le critère échoue sur les sorties dégénérées (19 % dès +0,67, 52 % dès −0,67), le bras neutre en comptant déjà 11 %. La plage utile se réduit donc avec la taille, au moins du 4B vers le 0.8B.
-- **Finesse (pente).** À l'échelle normalisée, la pente du 4B vaut 0,64 (pôle positif) et 0,66 (négatif), contre 0,35 et 0,47 pour le 2B et 0,35 et 0,30 pour le 0.8B. Le 4B dépasse le 2B de 0,29 [0,21 ; 0,37] au pôle positif et de 0,19 [0,10 ; 0,27] au négatif, et le 0.8B de 0,30 [0,21 ; 0,39] et 0,36 [0,25 ; 0,47]. Entre 2B et 0.8B, l'écart est indéterminé au pôle positif (0,007 [−0,08 ; 0,09]) et non nul au négatif (0,18 [0,08 ; 0,27]). Par unité d'échelle réelle, l'ordre s'inverse (0,9 pour le 4B et le 2B, 2,3 pour le 0.8B) : le petit modèle réagit plus par unité de `max_scale`, mais son `max_scale` a été choisi plus bas au pic 1.4, donc cette lecture ne sépare pas la taille du réglage.
+- **Plage de doses utile (finesse).** Sur le 4B, les trois doses positives (échelles 0,3, 0,5 et 0,7) sont utiles ; au pôle négatif, seule la dose −0,43 l'est, car les sorties dégénérées passent à 19 % puis 49 %. Sur le 2B, seule la dose +0,6 (échelle 0,3) l'est : +0,8 dépasse le seuil de peu, à 11 %, +1 monte à 33 %, et aucune dose négative ne passe (17 % de dégénérées dès −0,6). Sur le 0.8B, aucune dose ne l'est, alors que le ton se déplace de façon nette à toutes les doses : le critère échoue sur les sorties dégénérées (19 % dès +0,67, 52 % dès −0,67), le bras neutre en comptant déjà 11 %. Le classement dépend du seuil : à 5 % comme à 10 %, le 4B a 3 + 1 doses utiles, le 2B 1 + 0 et le 0.8B aucune ; à 20 %, le 4B en a 3 + 2, le 2B 2 + 1 et le 0.8B 1 + 0 (+0,67). L'ordre 4B > 2B > 0.8B tient donc aux trois seuils, mais l'écart entre 2B et 0.8B ne repose que sur une ou deux doses proches du seuil. Le nombre de doses utiles, plus que leur rapport, se compare entre modèles : les grilles de doses diffèrent.
+- **Sensibilité (pente).** À l'échelle normalisée, la pente du 4B vaut 0,64 (pôle positif) et 0,66 (négatif), contre 0,35 et 0,47 pour le 2B et 0,35 et 0,30 pour le 0.8B ; le 4B dépasse le 2B de 0,29 [0,21 ; 0,37] et 0,19 [0,10 ; 0,27], et le 0.8B de 0,30 [0,21 ; 0,39] et 0,36 [0,25 ; 0,47]. Par unité d'échelle réelle, la pente vaut 0,92 et 0,94 (4B), 0,71 et 0,95 (2B), 2,30 et 1,98 (0.8B) : le 0.8B passe devant les deux autres (4B − 0.8B −1,39 [−1,87 ; −0,92] et −1,04 [−1,50 ; −0,59] ; 2B − 0.8B −1,60 [−2,07 ; −1,14] et −1,04 [−1,48 ; −0,58]), et entre 4B et 2B l'écart n'est non nul qu'au pôle positif (+0,21 [0,07 ; 0,36]), indéterminé au négatif (−0,005 [−0,17 ; 0,14]). Le sens de la comparaison dépend donc de la normalisation : la dose normalisée suit le `max_scale` choisi pour chaque modèle au pic 1.4 (0,7, 0,5 et 0,15), l'échelle réelle ignore que ce plafond a été fixé là où les sorties restaient lisibles. Aucune des deux lectures ne sépare la taille de ce réglage ; la pente n'entre pas dans la conclusion sur la finesse.
 - **Amplitude à ±1.** Le ton à la dose +1 vaut 0,70 (4B), 0,35 (2B) et 0,31 (0.8B) : le 4B est au-dessus des deux autres (+0,35 [0,27 ; 0,43] et +0,40 [0,33 ; 0,47]), le 2B et le 0.8B ne se distinguent pas (+0,05 [−0,04 ; 0,14]). À −1, le ton vaut −0,60, −0,44 et −0,30 (écarts 4B−2B −0,16 [−0,25 ; −0,08], 2B−0.8B −0,14 [−0,23 ; −0,04]), mais avec 49 %, 61 % et 82 % de sorties dégénérées : le ton d'un texte dégénéré est mal défini, ces écarts ne mesurent pas un contrôle plus fin.
 - **Stabilité.** À +1, la part de sorties dégénérées vaut 4 %, 33 % et 36 % : le 4B est nettement plus stable que les deux autres (−0,29 [−0,39 ; −0,20] face au 2B, −0,32 [−0,42 ; −0,22] face au 0.8B), le 2B et le 0.8B sont indéterminés. À −1, elle vaut 49 %, 61 % et 82 % : écart non nul entre 4B et 0.8B (−0,33 [−0,45 ; −0,21]) et entre 2B et 0.8B (−0,21 [−0,32 ; −0,10]), borne proche de 0 entre 4B et 2B (−0,12 [−0,23 ; −0,01]). L'écart-type du ton à ±1 ne donne pas de lecture nette : plus faible pour le 4B à +1 (0,31 contre 0,39 pour le 2B, écart −0,08 [−0,13 ; −0,02]), indéterminé entre 4B et 2B à −1, et un écart non nul entre 4B et 0.8B seulement à −1 (+0,07 [0,02 ; 0,12]) dans le sens du 4B plus dispersé.
-- **Ce que le test tranche.** Entre le 4B d'une part, le 2B et le 0.8B d'autre part, le 4B a une pente plus forte, davantage de doses utiles et moins de sorties dégénérées au pôle positif. Entre le 2B et le 0.8B, rien d'établi au pôle positif ; le 0.8B est plus dégradé au pôle négatif. Aucune tendance monotone en taille n'est testée : trois points ne le permettent pas. Les données sont compatibles avec « plus fin et plus stable à 3-4B », sans établir un effet de taille.
+- **Ce que le test tranche.** Le 4B a davantage de doses utiles que le 2B et le 0.8B, à chacun des trois seuils, et moins de sorties dégénérées à +1 ; son ton à +1 est aussi plus marqué. Entre le 2B et le 0.8B, aucun écart établi par le bootstrap au pôle positif, et le 2B ne garde qu'une ou deux doses utiles de plus selon le seuil, proches de ce seuil ; le 0.8B est plus dégradé au pôle négatif. La pente ne tranche rien : son ordre s'inverse selon la normalisation. Aucune tendance monotone en taille n'est testée : trois points ne le permettent pas. Les données sont compatibles avec « plus fin (plus de doses utiles) et plus stable à 3-4B », sans établir un effet de taille.
 
 ## Limites
 
@@ -162,5 +190,5 @@ Face au prompt : ton du prompt joyeux 0.465 [0.396 ; 0.543], ton à la dose +1 0
 - **Trois tailles seulement**, 0,8B, 2B et 4B, et une seule famille (Qwen3.5, Q4_K_M) : aucune extrapolation à d'autres familles ni à des modèles plus grands.
 - **Aucun 7-9B**, faute de temps ; le bas de l'hypothèse (« de 0,8B à 3-4B ») est couvert, pas le haut.
 - Un seul classifieur de ton, sans juge en aveugle pour les modèles secondaires ; le ton d'un texte dégénéré est peu fiable.
-- 100 prompts issus de gabarits × sujets, donc non indépendants ; une seule génération gloutonne par prompt. Le seuil de 10 % de dégénérées et le critère de dose utile sont des choix de ce rapport. Pas de correction de multiplicité sur les 27 comparaisons.
+- 100 prompts issus de gabarits × sujets, donc non indépendants ; une seule génération gloutonne par prompt. Le seuil de 10 % de dégénérées (sensibilité publiée à 5 et 20 %) et le critère de dose utile sont des choix de ce rapport. Pas de correction de multiplicité sur les 36 comparaisons.
 - Les doses intermédiaires diffèrent d'un modèle à l'autre ; seules les doses ±1 se comparent point à point.

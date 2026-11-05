@@ -41,6 +41,7 @@ from mood_steering.eval.stats import Interval, bootstrap_ci  # noqa: E402
 DEFAULT_OUT = Path("data") / "runs" / "campagne-3-5"
 DEFAULT_REPORT = Path("docs") / "rapport-taille.md"
 MAX_DEGENERATE = 0.10  # une dose n'est utile que si au plus 10 % des sorties sont dégénérées
+THRESHOLDS = (0.05, 0.10, 0.20)  # sensibilité de la plage utile au seuil de dégénérées
 N_BOOT = 2000
 MARK_START = "<!-- mesures -->"
 MARK_END = "<!-- /mesures -->"
@@ -151,23 +152,45 @@ class ArmRow:
     sd: float
     refusal_rate: float
     degenerate_rate: float
+    shifted: bool | None  # None : bras sans steering
     useful: bool | None  # None : bras sans steering ou sans ton mesuré
 
+    def useful_at(self, max_degenerate: float) -> bool | None:
+        if self.shifted is None:
+            return None
+        return self.shifted and self.degenerate_rate <= max_degenerate
 
-def useful_arm(arm: ArmData, neutral: ArmData, *, n_boot: int, seed: int) -> bool:
-    """Utile : ton déplacé dans le sens de la dose (IC95 disjoint du neutre), peu de dégénérées."""
+
+def shifted_arm(arm: ArmData, neutral: ArmData, *, n_boot: int, seed: int) -> bool:
+    """Ton déplacé dans le sens de la dose : deux IC95 bootstrap calculés séparément, disjoints.
+
+    Critère conservateur : ce n'est pas un test de l'écart apparié bras - neutre.
+    """
     ci, ci0 = (bootstrap_ci(list(x.tones), n_boot=n_boot, seed=seed) for x in (arm, neutral))
     if arm.dose > 0:
-        shifted = ci.low > ci0.high
-    else:
-        shifted = ci.high < ci0.low
-    return shifted and rate(arm.degenerate) <= MAX_DEGENERATE
+        return ci.low > ci0.high
+    return ci.high < ci0.low
+
+
+def useful_arm(
+    arm: ArmData,
+    neutral: ArmData,
+    *,
+    n_boot: int,
+    seed: int,
+    max_degenerate: float = MAX_DEGENERATE,
+) -> bool:
+    """Utile : ton déplacé dans le sens de la dose (IC95 disjoint du neutre), peu de dégénérées."""
+    shifted = shifted_arm(arm, neutral, n_boot=n_boot, seed=seed)
+    return shifted and rate(arm.degenerate) <= max_degenerate
 
 
 def arm_rows(data: ModelData, *, n_boot: int = N_BOOT, seed: int = 0) -> list[ArmRow]:
     rows = []
     for a in data.arms:
         steered = a.kind == KIND_STEERING
+        shifted = shifted_arm(a, data.neutral, n_boot=n_boot, seed=seed) if steered else None
+        deg = rate(a.degenerate)
         rows.append(
             ArmRow(
                 name=a.name,
@@ -176,8 +199,9 @@ def arm_rows(data: ModelData, *, n_boot: int = N_BOOT, seed: int = 0) -> list[Ar
                 tone=bootstrap_ci(list(a.tones), n_boot=n_boot, seed=seed),
                 sd=sd(a.tones),
                 refusal_rate=rate(a.refusal),
-                degenerate_rate=rate(a.degenerate),
-                useful=useful_arm(a, data.neutral, n_boot=n_boot, seed=seed) if steered else None,
+                degenerate_rate=deg,
+                shifted=shifted,
+                useful=None if shifted is None else (shifted and deg <= MAX_DEGENERATE),
             )
         )
     return rows
@@ -194,11 +218,13 @@ class UsefulRange:
         return self.doses[-1] / self.doses[0] if self.doses else None
 
 
-def useful_ranges(data: ModelData, rows: Sequence[ArmRow]) -> list[UsefulRange]:
+def useful_ranges(
+    data: ModelData, rows: Sequence[ArmRow], max_degenerate: float = MAX_DEGENERATE
+) -> list[UsefulRange]:
     by = {r.name: r for r in rows}
     out = []
     for sign, pole in ((1, "positif"), (-1, "négatif")):
-        ok = [a for a in data.steering(sign) if by[a.name].useful]
+        ok = [a for a in data.steering(sign) if by[a.name].useful_at(max_degenerate)]
         doses = tuple(abs(a.dose) for a in ok)
         out.append(UsefulRange(pole, doses, tuple(d * data.spec.max_scale for d in doses)))
     return out
@@ -251,8 +277,31 @@ def boot_stat(data: ModelData, stat: Stat, *, n_boot: int, seed: int) -> list[fl
     return [stat(data, rng.choices(range(n), k=n)) for _ in range(n_boot)]
 
 
-def stat_slope(sign: int | None) -> Stat:
-    return lambda d, idx: slope(tone_points(d, sign, idx))
+def paired_diff_draws(
+    a: ModelData, b: ModelData, stat: Stat, *, n_boot: int, seed: int
+) -> list[float]:
+    """Tirages de stat(a) - stat(b), appariés : les mêmes prompts rééchantillonnés pour a et b."""
+    if a.ids != b.ids:
+        raise ValueError(
+            f"{a.spec.model_id} et {b.spec.model_id} : prompts différents, appariement impossible"
+        )
+    rng = random.Random(seed)
+    n = len(a.ids)
+    out = []
+    for _ in range(n_boot):
+        idx = rng.choices(range(n), k=n)
+        out.append(stat(a, idx) - stat(b, idx))
+    return out
+
+
+def stat_slope(sign: int | None, real_scale: bool = False) -> Stat:
+    """Pente du ton sur la dose normalisée, ou sur l'échelle réelle (dose x ``max_scale``)."""
+
+    def f(d: ModelData, idx: Sequence[int]) -> float:
+        k = d.spec.max_scale if real_scale else 1.0
+        return slope([(x * k, y) for x, y in tone_points(d, sign, idx)])
+
+    return f
 
 
 def stat_tone(sign: int) -> Stat:
@@ -277,6 +326,9 @@ COMPARED: tuple[tuple[str, Stat], ...] = (
     ("pente dose → ton, pôle positif (par dose normalisée)", stat_slope(1)),
     ("pente dose → ton, pôle négatif (par dose normalisée)", stat_slope(-1)),
     ("pente dose → ton, tous bras (par dose normalisée)", stat_slope(None)),
+    ("pente dose → ton, pôle positif (par unité d'échelle réelle)", stat_slope(1, True)),
+    ("pente dose → ton, pôle négatif (par unité d'échelle réelle)", stat_slope(-1, True)),
+    ("pente dose → ton, tous bras (par unité d'échelle réelle)", stat_slope(None, True)),
     ("ton à la dose +1", stat_tone(1)),
     ("ton à la dose −1", stat_tone(-1)),
     ("écart-type du ton à la dose +1", stat_sd(1)),
@@ -293,23 +345,27 @@ class ModelStats:
     ranges: list[UsefulRange]
     slopes: dict[str, Interval]  # pôle -> pente par dose normalisée
     prompt: str
-    draws: dict[str, list[float]]  # nom de statistique -> tirages bootstrap
+    sensitivity: dict[float, list[UsefulRange]]  # seuil de dégénérées -> plages utiles
+    n_boot: int = N_BOOT
+    seed: int = 0
 
 
 def model_stats(data: ModelData, *, n_boot: int = N_BOOT, seed: int = 0) -> ModelStats:
     rows = arm_rows(data, n_boot=n_boot, seed=seed)
     n = range(len(data.ids))
-    draws = {name: boot_stat(data, stat, n_boot=n_boot, seed=seed) for name, stat in COMPARED}
     slopes = {}
     for name, stat in COMPARED[:3]:
-        slopes[name] = interval(draws[name], stat(data, list(n)))
+        draws = boot_stat(data, stat, n_boot=n_boot, seed=seed)
+        slopes[name] = interval(draws, stat(data, list(n)))
     return ModelStats(
         data,
         rows,
         useful_ranges(data, rows),
         slopes,
         prompt_gap(data, n_boot=n_boot, seed=seed),
-        draws,
+        {t: useful_ranges(data, rows, t) for t in THRESHOLDS},
+        n_boot,
+        seed,
     )
 
 
@@ -323,13 +379,13 @@ class Comparison:
 
 
 def compare(a: ModelStats, b: ModelStats) -> list[Comparison]:
-    """Écart (a - b) de chaque statistique ; tirages indépendants entre les deux modèles."""
+    """Écart (a - b) de chaque statistique ; bootstrap apparié sur les prompts communs."""
     out = []
     for name, stat in COMPARED:
         point = stat(a.data, list(range(len(a.data.ids)))) - stat(
             b.data, list(range(len(b.data.ids)))
         )
-        diffs = [x - y for x, y in zip(a.draws[name], b.draws[name], strict=True)]
+        diffs = paired_diff_draws(a.data, b.data, stat, n_boot=a.n_boot, seed=a.seed)
         iv = interval(diffs, point)
         decided = not math.isnan(iv.low) and (iv.low > 0 or iv.high < 0)
         out.append(Comparison(name, a.data.spec.model_id, b.data.spec.model_id, iv, decided))
@@ -378,6 +434,12 @@ def model_section(ms: ModelStats) -> str:
         )
     lines += ["", "Plage de doses utile :", ""]
     lines += [f"- pôle {r.pole} : {_range_text(r)}" for r in ms.ranges]
+    lines += ["", "Sensibilité au seuil de sorties dégénérées (doses utiles par pôle) :", ""]
+    for t, ranges in ms.sensitivity.items():
+        per_pole = " ; ".join(
+            f"{r.pole} {', '.join(f'{d:g}' for d in r.doses) or 'aucune'}" for r in ranges
+        )
+        lines.append(f"- seuil {t * 100:.0f} % : {per_pole}")
     lines += ["", "Pente dose → ton (tous les bras d'un pôle, plus le neutre à la dose 0) :", ""]
     for name, iv in ms.slopes.items():
         per_scale = Interval(
@@ -439,6 +501,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):  # cp1252 sous Windows quand la sortie est redirigée
+        sys.stdout.reconfigure(encoding="utf-8")
     stats = {
         k: model_stats(load_model(args.out, MODELS[k]), n_boot=args.n_boot) for k in SIZE_ORDER
     }

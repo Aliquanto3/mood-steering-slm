@@ -227,3 +227,55 @@ def test_main_prints_without_report(tmp_path, capsys):
     text = report.read_text(encoding="utf-8")
     assert text.startswith("# Titre écrit à la main\n" + rs.MARK_START)
     assert "## Mesures par modèle" in text and text.endswith(rs.MARK_END + "\n")
+
+
+def _shifted(data, delta, spec=None):
+    """Même modèle, tons décalés de ``delta`` prompt par prompt."""
+    arms = tuple(
+        rs.ArmData(
+            a.name, a.kind, a.dose, tuple(t + delta for t in a.tones), a.refusal, a.degenerate
+        )
+        for a in data.arms
+    )
+    return rs.ModelData(spec or data.spec, data.ids, arms)
+
+
+def test_compare_is_paired_on_the_same_resampled_prompts():
+    base = _model("4b", gain=0.6)
+    noisy = tuple(
+        rs.ArmData(
+            a.name,
+            a.kind,
+            a.dose,
+            tuple(t + (i % 7) * 0.3 for i, t in enumerate(a.tones)),
+            a.refusal,
+            a.degenerate,
+        )
+        for a in base.arms
+    )
+    a = rs.ModelData(base.spec, base.ids, noisy)
+    b = _shifted(a, -0.1, rs.MODELS["2b"])
+    by = {
+        c.stat: c for c in rs.compare(rs.model_stats(a, n_boot=200), rs.model_stats(b, n_boot=200))
+    }
+    tone = by["ton à la dose +1"].diff
+    # apparié : l'écart vaut 0,1 sur chaque tirage ; indépendant, l'IC serait large
+    assert tone.low == pytest.approx(0.1) and tone.high == pytest.approx(0.1)
+
+
+def test_paired_draws_refuse_different_prompts():
+    a = _model("4b")
+    b = rs.ModelData(rs.MODELS["2b"], tuple(f"x{i:02d}" for i in range(40)), a.arms)
+    with pytest.raises(ValueError, match="appariement"):
+        rs.paired_diff_draws(a, b, rs.stat_tone(1), n_boot=10, seed=0)
+
+
+def test_real_scale_slope_divides_by_max_scale_and_sensitivity_to_threshold():
+    data = _model("0.8b", gain=0.6, bad_last=6)  # 15 % de dégénérées à ±1
+    idx = list(range(len(data.ids)))
+    assert rs.stat_slope(1, True)(data, idx) == pytest.approx(0.6 / data.spec.max_scale)
+    ms = rs.model_stats(data, n_boot=200)
+    doses = {t: [r.doses for r in ranges] for t, ranges in ms.sensitivity.items()}
+    assert doses[0.05] == doses[0.10] == [(0.5,), (0.5,)]
+    assert doses[0.20] == [(0.5, 1.0), (0.5, 1.0)]
+    assert "seuil 20 % : positif 0.5, 1 ; négatif 0.5, 1" in rs.model_section(ms)
