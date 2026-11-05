@@ -26,7 +26,7 @@ Statut : réalisé le 2026-11-04 sur la tour (RTX 3050 8 Go, CPU pour ce pic). S
   | ×0,05 | non | 22 / 27 | lisible, en français, plus positif que la base |
 
 - **Verdict pour CAP-1 : suffisant.** Le cœur du projet ne passera que par le binding : il lui faut relire le vecteur en flottants (fait) et un tampon que `llama_set_adapter_cvec` applique comme la CLI (égalités à ×1 et ×0,3 sur texte dégénéré, où le vecteur domine, et 90 caractères lisibles communs à ×0,1, la preuve la plus forte). L'écart restant tient au build, pas au vecteur ; il n'affecte pas un démonstrateur qui compare des doses sur un seul chemin.
-- Conséquence pour la story 1.4 : le vecteur `--method mean` n'est pas normalisé ; sur ce modèle, la plage lisible observée va d'environ ×0,05 à ×0,1, le texte dégénère dès ×0,15, et la langue bascule vers l'anglais vers ×0,1. À balayer finement sous ×0,15.
+- Conséquence pour la story 1.4 : le vecteur `--method mean` est déjà normalisé à une norme L2 de 1 par couche (`tools/cvector-generator/mean.hpp`, normes relues à 1,000 par le pic 1.4) ; ses doses s'entendent donc en multiples d'une direction unitaire ; sur ce modèle, la plage lisible observée va d'environ ×0,05 à ×0,1, le texte dégénère dès ×0,15, et la langue bascule vers l'anglais vers ×0,1. À balayer finement sous ×0,15.
 
 ## Nommage des tenseurs (constaté et lu dans les sources b12118)
 
