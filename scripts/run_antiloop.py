@@ -30,8 +30,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from mood_steering.eval.accuracy import McqItem, extract_letter, format_prompt
-from mood_steering.eval.stats import bootstrap_ci
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import run_bench as rb  # noqa: E402  (lecture JSONL partagée, import seul)
+
+from mood_steering.eval.accuracy import McqItem, extract_letter, format_prompt  # noqa: E402
+from mood_steering.eval.stats import bootstrap_ci  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS_DIR = ROOT / "data" / "runs" / "antiloop"
@@ -117,13 +121,7 @@ def read_records(path: Path) -> list[dict[str, Any]]:
     """Lit le JSONL ; ignore une dernière ligne tronquée par un arrêt brutal."""
     if not path.is_file():
         return []
-    out: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        try:
-            out.append(json.loads(line))
-        except json.JSONDecodeError:
-            break
-    return out
+    return rb._read_part(path)
 
 
 def run_arm(
@@ -140,9 +138,13 @@ def run_arm(
     ids = [r["item_id"] for r in done]
     if ids != [i.id for i in items][: len(ids)]:
         raise ValueError(f"{path.name} : reprise incohérente avec les items demandés")
-    with path.open("w", encoding="utf-8") as fh:  # réécrit les lignes valides puis ajoute
+    # Réécriture atomique des lignes valides (écarte une ligne tronquée), puis ajout.
+    part = path.with_name(path.name + ".part")
+    with part.open("w", encoding="utf-8", newline="\n") as fh:
         for rec in done:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    os.replace(part, path)
+    with path.open("a", encoding="utf-8", newline="\n") as fh:
         for item in items[len(done) :]:
             text, n_tokens, finished = generate(format_prompt(item))
             rec = {

@@ -195,10 +195,13 @@ def run_campaign(
     done: dict[str, set[str]] = {}
     for arm in arms:
         rows = load_rows(arm_file(out, arm))
-        # réécriture propre : retire une éventuelle ligne tronquée avant d'ajouter
-        with arm_file(out, arm).open("w", encoding="utf-8", newline="\n") as fh:
+        # réécriture atomique : retire une éventuelle ligne tronquée avant d'ajouter
+        path = arm_file(out, arm)
+        part = path.with_name(path.name + ".part")
+        with part.open("w", encoding="utf-8", newline="\n") as fh:
             for row in rows:
                 fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+        os.replace(part, path)
         done[arm] = {r["item_id"] for r in rows}
     for item, seed in items:
         for arm in arms:

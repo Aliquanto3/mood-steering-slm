@@ -523,3 +523,43 @@ def test_is_complete_sur_un_sous_ensemble(tmp_path):
     cfg = rp.Config(n_prompts=3)
     assert rp.run_campaign(steerer, rp.items_for(cfg)[:2], tmp_path)
     assert rp.is_complete(tmp_path, cfg, subset=2) and not rp.is_complete(tmp_path, cfg)
+
+
+def test_run_campaign_reprise_avec_separateurs_unicode(tmp_path):
+    steerer, backend = make_steerer()
+    assert rp.run_campaign(steerer, prompts(1), tmp_path)
+    path = rp.arm_file(tmp_path, "pulse")
+    row = rp.load_rows(path)[0]
+    row["output"] = "a b c\u0085d"
+    raw = (json.dumps(row, ensure_ascii=False) + "\n").encode("utf-8")
+    path.write_bytes(raw)
+    n_calls = len(backend.calls)
+    assert rp.run_campaign(steerer, prompts(2), tmp_path)
+    assert len(backend.calls) == n_calls + len(rp.ARMS)  # seul le prompt 2 est généré
+    assert path.read_bytes().startswith(raw)
+    rows = rp.load_rows(path)
+    assert [r["item_id"] for r in rows] == ["pulse000", "pulse001"]
+    assert rows[0]["output"] == "a b c\u0085d"
+
+
+def test_run_campaign_reecriture_atomique_via_part(tmp_path, monkeypatch):
+    steerer, backend = make_steerer()
+    assert rp.run_campaign(steerer, prompts(1), tmp_path)
+    path = rp.arm_file(tmp_path, "neutral")
+    path.write_bytes(path.read_bytes() + b'{"arm": "neu')  # dernière ligne tronquée
+    before = path.read_bytes()
+
+    def boom(src, dst):
+        raise OSError("arrêt simulé")
+
+    monkeypatch.setattr(rp.os, "replace", boom)
+    with pytest.raises(OSError, match="arrêt simulé"):
+        rp.run_campaign(steerer, prompts(1), tmp_path, arms=("neutral",))
+    assert path.read_bytes() == before
+    monkeypatch.undo()
+    n_calls = len(backend.calls)
+    assert rp.run_campaign(steerer, prompts(1), tmp_path, arms=("neutral",))
+    assert len(backend.calls) == n_calls  # rien de régénéré, .part résiduel écrasé
+    assert [r["item_id"] for r in rp.load_rows(path)] == ["pulse000"]
+    assert path.read_bytes().endswith(b"}\n")
+    assert not path.with_name("neutral.jsonl.part").exists()
