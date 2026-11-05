@@ -40,6 +40,7 @@ class StreamBackend:
 
     def set_cvec(self, data, n_embd, il_start, il_end):
         self.cvec = None if data is None else data.copy()
+        self.cvec_range = (il_start, il_end)
 
     def generate(self, prompt, system, max_tokens, seed):
         return "".join(self.stream(prompt, system, max_tokens, seed))
@@ -352,3 +353,13 @@ def test_aucun_modele_charge():
         "sys.exit(1 if 'llama_cpp' in sys.modules else 0)"
     )
     assert subprocess.run([sys.executable, "-c", code]).returncode == 0
+
+
+def test_plage_de_couches_avec_vecteur_complet():
+    full = np.arange((N_LAYER - 1) * N_EMBD, dtype=np.float32).reshape(N_LAYER - 1, N_EMBD) + 1
+    client, backends = make(full, max_scale=1.0, il_start=2, il_end=3)
+    events(client, dose=1.0)
+    steering = next(b for b in backends if b.cvec is not None)
+    assert steering.cvec_range == (2, 3)
+    np.testing.assert_array_equal(steering.cvec[:N_EMBD], np.zeros(N_EMBD))
+    np.testing.assert_array_equal(steering.cvec[N_EMBD:], full[1:3].reshape(-1))
