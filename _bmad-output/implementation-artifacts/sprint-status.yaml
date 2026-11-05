@@ -62,10 +62,10 @@ development_status:
   4-3-répétition-sur-le-portable-et-release-v0-1-0: backlog
   epic-4-retrospective: optional
 
-  epic-5: backlog
+  epic-5: in-progress
   5-1-pharmacocinétique-h6: backlog
   5-2-effet-de-taille-h2: backlog
-  5-3-frugalité-avec-codecarbon-h7: backlog
+  5-3-frugalité-avec-codecarbon-h7: in-progress
   5-4-axe-calme-agitation-h5: backlog
   epic-5-retrospective: optional
 
