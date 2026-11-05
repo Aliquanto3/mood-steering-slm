@@ -287,3 +287,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:09 · 4.3 · fusion · #20 fusionnée, MERGED vérifié · 1077145
 - 2026-11-05 05:09 · 4.3 · décision · tag annoté v0.1.0 et release GitHub publiés ; topic status-spec → status-bench · 1077145
 - 2026-11-05 05:09 · 4.3 · attente humaine · test de la démo sur le portable par Anaël (non bloquant) · —
+- 2026-11-05 05:11 · 5.3 · dev · branchement fini : --energy, H7 par bras, mesure courte 0.8B CPU (steering sans surcoût mesurable), --short-run ajouté · 05ce60c
+- 2026-11-05 05:11 · 5.3 · second-avis · lancé (Haiku) · 05ce60c
+- 2026-11-05 05:11 · 5.2 · dev · lancé (Sonnet, worktree), analyse des données 3.5 sans génération, 7-9B hors périmètre · —
