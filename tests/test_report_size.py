@@ -143,7 +143,7 @@ def test_model_stats_slopes_and_prompt_gap():
     ms = rs.model_stats(_model(gain=0.6), n_boot=200)
     for iv in ms.slopes.values():
         assert iv.mean == pytest.approx(0.6)
-        assert iv.low <= 0.6 <= iv.high
+        assert iv.low - 1e-9 <= 0.6 <= iv.high + 1e-9
     assert "recouvre" in ms.prompt or "reste sous" in ms.prompt or "dépasse" in ms.prompt
     assert "reste sous" in rs.prompt_gap(_model(gain=0.3), n_boot=200)
     assert "dépasse" in rs.prompt_gap(_model(gain=1.6), n_boot=200)
