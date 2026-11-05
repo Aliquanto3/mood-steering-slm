@@ -315,3 +315,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:56 · 5.4 · dev · lancé (Sonnet, worktree) : paires calme ↔ agitation, calibration 4B, cosinus, scripts/run_axis.py, rapport H5 · —
 - 2026-11-05 05:58 · 5.1 · second-avis · dose du pulse bien appliquée ; 3 medium (constant steere le prompt, pulse non : confusion ; libellé dose brute ; demo.md surpromet), 4 low · 501f059
 - 2026-11-05 05:58 · 5.1 · review · lancée (Opus) avec deux bras de contrôle : constant sans prompt, décroissance seule · —
+- 2026-11-05 06:35 · 5.1 · review · passe 1 : 3 medium + 4 low corrigés ; bras de contrôle mesurés (GPU, 50 prompts) : constant sans prompt +0,19 → +0,35 au-dessus du neutre, décroissance seule +0,41 [+0,29 ; +0,53] du premier au dernier segment ; H6 non pour le pulse, oui réduit pour la décroissance · 94f64d8
+- 2026-11-05 06:35 · 5.1 · review · passe 2 lancée (Opus) · —
