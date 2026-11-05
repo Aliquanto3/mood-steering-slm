@@ -169,3 +169,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:13 · 3.3 · fusion · #10 fusionnée, MERGED vérifié · 80cd1b9
 - 2026-11-05 01:13 · 3.3 · décision · puissance H3 : ~48 items justes par bras → écart détectable ≈ ±0,18 ; à trancher pour la campagne 3.5 (plus d'items pour la complaisance ou limite publiée) · —
 - 2026-11-05 01:13 · 3.4 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD) · —
+- 2026-11-05 01:17 · 3.4 · dev · fini, 29 tests (231 au total) ; test du pôle négatif retenu : bootstrap de la différence (détection 0,80 contre 0,65, 0 faux positif) · 5a0a8eb
+- 2026-11-05 01:17 · 3.4 · second-avis · lancé · —
