@@ -242,3 +242,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:14 · 6.1 · CI · verte (4 jobs dont extras) · d2b90b7
 - 2026-11-05 02:14 · 6.1 · fusion · #16 fusionnée, MERGED vérifié · 6aa6090
 - 2026-11-05 02:14 · 6.2 · dev · lancé (code et fumée seulement ; mesure complète après la campagne 3.5 pour ne pas lui prendre la tour) · —
+- 2026-11-05 02:18 · 6.2 · dev · code fini, 6 tests ; fumée OK (14 s, 2 items) ; mesure complète demande transformers>=5.22 (Qwen3.5 inconnu de 4.57) via un environnement --no-project · d0871df
+- 2026-11-05 02:18 · 6.2 · second-avis · lancé · —
