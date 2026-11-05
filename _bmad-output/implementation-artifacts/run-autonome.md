@@ -304,3 +304,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:23 · 5.2 · review · passe 2 lancée (Opus) · —
 - 2026-11-05 05:23 · 5.3 · CI · verte · f77dade
 - 2026-11-05 05:23 · 5.3 · fusion · #21 fusionnée, MERGED vérifié · 6daca5c
+- 2026-11-05 05:24 · 5.1 · dev · lancé (Sonnet, worktree) : profil pulse dans la démo, scripts/run_pulse.py, rapport H6 · —
