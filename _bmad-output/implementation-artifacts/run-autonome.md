@@ -323,3 +323,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 06:42 · 5.1 · CI · verte · 90ab1f2
 - 2026-11-05 06:42 · 5.1 · fusion · #23 fusionnée, MERGED vérifié · 4719544
 - 2026-11-05 07:40 · 5.4 · dev · fini, H5 non tenue (échelle 0,2 seule valide, 0,4 dégénérée, mesure CPU) · 86d1b15
+- 2026-11-05 07:41 · 6.2 · dev · mesure finie (n=100, 512 tokens, 4 bras saturés au plafond, IC recouvrants : non concluant) · c0a0077
+- 2026-11-05 07:41 · 6.2 · second-avis · lancé (rapport seul) · —
+- 2026-11-05 07:41 · 5.4 · second-avis · lancé · —
