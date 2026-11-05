@@ -45,7 +45,7 @@ development_status:
   epic-2: in-progress
   2-1-module-calibration-et-cache-des-vecteurs: done
   2-2-module-steering-dose-et-repli-sur-le-prompt: done
-  2-3-module-schedule-dose-par-token: backlog
+  2-3-module-schedule-dose-par-token: in-progress
   epic-2-retrospective: optional
 
   epic-3: in-progress
@@ -58,7 +58,7 @@ development_status:
 
   epic-4: in-progress
   4-1-serveur-fastapi-et-trois-flux-sse: done
-  4-2-interface-trois-colonnes-curseur-et-courbe-de-dose: in-progress
+  4-2-interface-trois-colonnes-curseur-et-courbe-de-dose: done
   4-3-répétition-sur-le-portable-et-release-v0-1-0: backlog
   epic-4-retrospective: optional
 

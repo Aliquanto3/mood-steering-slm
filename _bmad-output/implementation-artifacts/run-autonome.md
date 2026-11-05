@@ -203,3 +203,8 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:49 · 4.2 · second-avis · 0 high, 1 medium (seconde requête /stream après erreur), 5 low ; fermeture à done et textContent vérifiés · —
 - 2026-11-05 01:49 · 4.2 · décision · fetch en flux + AbortController au lieu d'EventSource · —
 - 2026-11-05 01:49 · 4.2 · review · passe 1 lancée · —
+- 2026-11-05 01:54 · 4.2 · review · passe 1 : 0 Important, 7 low corrigés (fetch en flux, repli tracé à 0, aria, O(n²) évité) ; JS exercé sous Node · 62038f5
+- 2026-11-05 01:54 · 4.2 · PR · #13 ouverte · 62038f5
+- 2026-11-05 01:54 · 4.2 · CI · verte sur les trois OS · 62038f5
+- 2026-11-05 01:54 · 4.2 · fusion · #13 fusionnée, MERGED vérifié · f1f7418
+- 2026-11-05 01:54 · 2.3 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; boucle bas niveau sample/eval) · —
