@@ -503,6 +503,11 @@ def judge_cached(
         "input_tokens": meter.input_tokens,
         "output_tokens": meter.output_tokens,
         "n_failures": len(result.failures),
+        # raison par sortie (message d'analyse ou type d'exception, jamais la clé)
+        "failures": {
+            f"{batch.mapping[b][0]}|{batch.mapping[b][1]}": why
+            for b, why in result.failures.items()
+        },
         "scores_by_arm": scores_by_arm(batch, result.scores),
         "scores_by_item": {
             f"{batch.mapping[b][0]}|{batch.mapping[b][1]}": s for b, s in result.scores.items()

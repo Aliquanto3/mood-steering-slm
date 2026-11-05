@@ -350,6 +350,29 @@ def test_reports_end_to_end(tmp_path, monkeypatch):
     assert report.read_text(encoding="utf-8").count("<!-- lecture -->\nLu.\n<!-- /lecture -->") == 1
 
 
+def test_judge_failures_are_recorded_with_reason(tmp_path):
+    four = rb.MODELS["4b"]
+    run(tmp_path, [four])
+
+    class Verbose(FakeJudgeClient):
+        def create(self, **kwargs):
+            self.calls += 1
+            return SimpleNamespace(
+                content=[SimpleNamespace(text="Ce texte décrit un marché, le ton est")],
+                usage=SimpleNamespace(input_tokens=50, output_tokens=64),
+            )
+
+    data = rb.judge_cached(
+        tmp_path, four, sample_size=5, seed=0, max_cost=1.0,
+        client_factory=Verbose, log=lambda s: None,
+    )  # fmt: skip
+    assert data["n_failures"] == 5 and data["scores_by_arm"] == {}
+    assert set(data["failures"].values()) == {"aucun JSON avec « score » dans la réponse"}
+    assert all(
+        k.split("|")[0].startswith(("neutral", "prompt", "steering")) for k in data["failures"]
+    )
+
+
 def test_judge_refused_above_cap(tmp_path):
     specs = [rb.MODELS["4b"]]
     run(tmp_path, specs)
