@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -32,7 +33,7 @@ from typing import Any
 
 from mood_steering.eval.accuracy import McqItem, extract_letter, format_prompt
 from mood_steering.eval.resumable import clean_for_append, dump_row
-from mood_steering.eval.stats import bootstrap_ci
+from mood_steering.eval.stats import bootstrap_ci, paired_bootstrap_diff
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS_DIR = ROOT / "data" / "runs" / "antiloop"
@@ -258,6 +259,66 @@ def run_arms(
     return summary
 
 
+def mcnemar_exact(only_a: int, only_b: int) -> float:
+    """p bilatérale du test de McNemar exact (binomiale p=0,5) sur les paires discordantes."""
+    n = only_a + only_b
+    if n == 0:
+        return 1.0
+    k = min(only_a, only_b)
+    tail = sum(math.comb(n, i) for i in range(k + 1)) / 2**n
+    return min(1.0, 2 * tail)
+
+
+def paired_report(
+    run_dir: Path, items: Sequence[McqItem], reference: str = "origin"
+) -> dict[str, Any]:
+    """Écarts appariés (référence - bras) sur les tronquées et l'exactitude, relus des JSONL.
+
+    Par bras : écart moyen, IC95 bootstrap apparié (5000 tirages, graine 0), discordants
+    (référence seule / bras seul) et p du McNemar exact. Sans effet de bord.
+    """
+
+    def column(name: str, kind: str) -> list[float]:
+        recs = {
+            r["item_id"]: r
+            for r in (
+                json.loads(line)
+                for line in (run_dir / f"{name}.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            )
+        }
+        out = []
+        for it in items:
+            r = recs[it.id]
+            if kind == "truncated":
+                out.append(1.0 if r["truncated"] else 0.0)
+            else:
+                ok = extract_letter(r["output"]) == it.answer and not r["truncated"]
+                out.append(1.0 if ok else 0.0)
+        return out
+
+    names = sorted(p.stem for p in run_dir.glob("*.jsonl"))
+    report: dict[str, Any] = {}
+    for kind in ("truncated", "accuracy"):
+        ref = column(reference, kind)
+        for name in names:
+            if name == reference:
+                continue
+            other = column(name, kind)
+            iv = paired_bootstrap_diff(ref, other, n_boot=5000, seed=0)
+            only_ref = sum(a == 1.0 and b == 0.0 for a, b in zip(ref, other, strict=True))
+            only_other = sum(a == 0.0 and b == 1.0 for a, b in zip(ref, other, strict=True))
+            report.setdefault(kind, {})[name] = {
+                "diff": iv.mean,
+                "low": iv.low,
+                "high": iv.high,
+                "only_reference": only_ref,
+                "only_arm": only_other,
+                "mcnemar_p": mcnemar_exact(only_ref, only_other),
+            }
+    return report
+
+
 def _env_path(name: str) -> Path | None:
     value = os.environ.get(name)
     return Path(value) if value else None
@@ -271,8 +332,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--alphas", type=float, nargs="+", default=[0.5, 1.0])
     ap.add_argument("--arms", nargs="+", help="sous-ensemble de bras (ex. origin ablation@1)")
     origin, surgery = _env_path("ANTILOOP_ORIGIN"), _env_path("ANTILOOP_SURGERY")
-    ap.add_argument("--origin", type=Path, default=origin, required=origin is None)
-    ap.add_argument("--surgery", type=Path, default=surgery, required=surgery is None)
+    ap.add_argument("--origin", type=Path, default=origin)
+    ap.add_argument("--surgery", type=Path, default=surgery)
     ap.add_argument("--directions-dir", type=Path, default=ROOT / "data" / "directions")
     ap.add_argument(
         "--thinking",
@@ -283,7 +344,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--dtype", default="bfloat16")
     ap.add_argument("--threads", type=int, default=None)
+    ap.add_argument(
+        "--report",
+        action="store_true",
+        help="écrit paired.json (écarts appariés origin - bras, McNemar exact) sans générer",
+    )
     args = ap.parse_args(argv)
+    if not args.report and (args.origin is None or args.surgery is None):
+        ap.error("--origin et --surgery sont obligatoires (ou ANTILOOP_ORIGIN / ANTILOOP_SURGERY)")
+    if args.report:
+        from mood_steering.eval.datasets import load_global_mmlu_lite
+
+        run_dir = RUNS_DIR / args.run_id
+        n = json.loads((run_dir / "config.json").read_text(encoding="utf-8"))["n"]
+        out = paired_report(run_dir, load_global_mmlu_lite(n=n))
+        (run_dir / "paired.json").write_text(
+            json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return 0
 
     import numpy as np
     import torch
