@@ -198,3 +198,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:45 · 4.1 · CI · verte sur les trois OS · 5ceaa0b
 - 2026-11-05 01:45 · 4.1 · fusion · #12 fusionnée, MERGED vérifié · 494f3bb
 - 2026-11-05 01:45 · 4.2 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD) · —
+- 2026-11-05 01:47 · 4.2 · dev · fini, 3 tests (265 au total), HTML/CSS/JS natifs sans CDN ; JS non exécuté en navigateur · e207cf2
+- 2026-11-05 01:47 · 4.2 · second-avis · lancé · —
