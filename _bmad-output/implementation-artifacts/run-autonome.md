@@ -262,3 +262,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:40 · 5.3 · CI · verte (6 jobs) · c4da255
 - 2026-11-05 02:40 · 5.3 · fusion · #18 fusionnée (partie code), MERGED vérifié ; branchement run_bench après 3.5 · 1fe6b7b
 - 2026-11-05 04:36 · 3.5 · dev · fini, campagne complète 3 modèles, verdict « non » (H1 non tenue, H4 oui), juge 56/200 invalides (max_tokens 64), 339 tests verts · a621925
+- 2026-11-05 04:37 · 3.5 · second-avis · lancé (Haiku) · a621925
+- 2026-11-05 04:37 · 6.2 · dev · mesure complète lancée (Sonnet, worktree, GPU) · —
+- 2026-11-05 04:37 · décision · vecteurs régénérés par 3.5 copiés dans data/moods/ du dépôt principal (cos 0,993–0,996) · —
