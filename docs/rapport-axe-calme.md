@@ -20,7 +20,7 @@ Seuils écrits avec le script, dans le même commit que les mesures : leur anté
 - **H5 (a)** : à une échelle donnée, (calme+) l'indice d'activation baisse, IC95 < 0, et |Δactivation| − |Δvalence| > 0 (IC95 > 0) ; (agitation) l'activation monte, IC95 > 0, même sélectivité ; (joie+) la valence monte, IC95 > 0, et |Δvaleur| > |Δactivation| (IC95 de |Δact| − |Δval| < 0).
 - **H5 (b)** : le bras combiné garde l'activation de calme+ (IC95 < 0) et la valence de joie+ (IC95 > 0), chaque effet à au moins 50% de l'effet du bras seul (rapport des moyennes).
 - **Validité** d'une échelle : chaque bras dépasse le neutre de 20% de sorties dégénérées au plus (`is_coherent` du pic 1.4).
-- **Verdict** : tenue si les cosinus passent et si (a), (b) et la validité sont réunis à au moins une échelle ; partielle si une partie seulement l'est ; sinon non tenue.
+- **Verdict** : tenue si les cosinus passent et si (a), (b) et la validité sont réunis à au moins une échelle ; partielle si une partie seulement l'est ; non tenue si les cosinus échouent ; sinon non concluante.
 
 ## Cosinus entre calm_agitation et joy_sadness
 
