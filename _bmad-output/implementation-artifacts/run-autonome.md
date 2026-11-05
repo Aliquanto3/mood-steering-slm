@@ -346,3 +346,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 07:57 · run · fusion · #26 rapport de verdict (H5 à H7 renvoyées à leurs rapports ; doc de l'orchestrateur, second avis sauté, faits vérifiés contre les rapports), MERGED vérifié · 546e055
 - 2026-11-05 07:57 · run · ménage · données des worktrees copiées dans data/ et models/cuda-runtime du dépôt principal, puis 7 worktrees supprimés et prune · —
 - 2026-11-05 07:57 · run · PR · #27 version 0.2.0 ouverte · —
+- 2026-11-05 07:58 · run · fusion · #27 version 0.2.0, MERGED vérifié · 51e00e0
+- 2026-11-05 07:58 · run · décision · tag v0.2.0 et release GitHub publiés ; topic status-bench conservé · 51e00e0
+- 2026-11-05 07:58 · run · fin · epics 1 à 6 done ; attente humaine : relecture des paires calme ↔ agitation (5.4), test de la démo sur le portable (4.3) · 51e00e0
