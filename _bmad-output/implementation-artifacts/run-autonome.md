@@ -225,3 +225,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:02 · 2.3 · review · passe 1 lancée (avec le contrat du tampon cvec) · —
 - 2026-11-05 02:04 · 6.1 · dev · fini, 22 tests ; direction du MIT trouvée dans slm-weight-editing (delta rang 1, couches 15 et 19, dim 1024), non exportée · 3e6b1a9
 - 2026-11-05 02:04 · 6.1 · second-avis · lancé · —
+- 2026-11-05 02:06 · 6.1 · second-avis · 0 high, 4 medium (tests torch hors CI, une direction pour deux couches |cos|=0,85, bf16, safetensors BF16), 1 low · —
+- 2026-11-05 02:06 · 6.1 · décision · job CI extras sur ubuntu ; directions par couche ; export des directions du MIT hors dépôt · —
+- 2026-11-05 02:06 · 6.1 · review · passe 1 lancée · —
