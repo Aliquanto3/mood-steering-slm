@@ -34,3 +34,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 #dose-curve .legend { fill:var(--warn-fg); }
 /* Le SVG se réduit avec l'écran : police plus grande en unités du viewBox pour rester lisible. */
 @media (max-width: 500px) { #dose-curve text { font-size:15px; } }
+
+.field[hidden] { display:none; }
+select, input[type=number] { font:inherit; padding:.25rem; max-width:100%; }

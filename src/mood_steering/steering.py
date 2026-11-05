@@ -369,6 +369,9 @@ class LlamaCppBackend:
         )
         self.n_embd = int(self._llm.n_embd())
         self.n_layer = int(llama_cpp.llama_model_n_layer(self._llm._model.model))
+        # cause de fin de la dernière boucle : "eog" (token de fin), "budget" (max_tokens ou
+        # contexte plein, le dernier token démarré est un vrai token), None avant toute boucle
+        self.last_stop: str | None = None
 
     def reset(self) -> None:
         # Llama.reset remet n_tokens à 0 : generate n'essaie plus de réutiliser le
@@ -444,16 +447,20 @@ class LlamaCppBackend:
         vocab = llm._model.vocab
         is_eog = self._cpp.llama_vocab_is_eog
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        self.last_stop = None
         for t in range(max_tokens):
             on_token_start(t)
             llm.eval(pending)
             tok = llm.sample(top_k=1, temp=0.0)
             if is_eog(vocab, tok):
+                self.last_stop = "eog"
                 break
             pending = [tok]
             text = decoder.decode(llm.detokenize([tok]))
             if text:
                 yield text
+        else:
+            self.last_stop = "budget"
 
     def _chat_formatter(self):
         from llama_cpp import llama_chat_format
