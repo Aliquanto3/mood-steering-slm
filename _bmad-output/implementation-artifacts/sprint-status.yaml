@@ -99,7 +99,7 @@ action_items:
     action: "A5 story v0.3 : module commun JSONL reprenable, bootstrap apparié, percentile
       ; critère de dose utile unique ; chemin d énergie mort retiré"
     owner: "orchestrateur"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
   - id: "epic-5-retro-item-5-a6-seuils-des-hypothèses-bonus-pré-enreg"
     epic: 5

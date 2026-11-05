@@ -360,3 +360,7 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 21:08 · A5 · second-avis · 0 high, 1 medium (stop() du traqueur d'énergie masque l'exception de l'unité), 6 low · 3890be9
 - 2026-11-05 21:08 · A5 · review · passe 1 lancée (Opus) · —
 - 2026-11-05 21:08 · A2 · contrôle croisé · slm-quality-bench wsp-20261104 think_on (plafond 4096) : tronquées 72,9 % (558/765) base, 43,2 % (333/770) wsp · —
+- 2026-11-05 21:13 · A5 · review · passe 1 (Opus) : medium et 1 low corrigés, 1 nit corrigé · 6966491
+- 2026-11-05 21:13 · A5 · review · passe 2 (Sonnet) : 0 Important · 5f1bdd1
+- 2026-11-05 21:13 · A5 · CI · verte (6 jobs) · 5f1bdd1
+- 2026-11-05 21:13 · A5 · fusion · #30 fusionnée, MERGED vérifié · b3bf8ef
