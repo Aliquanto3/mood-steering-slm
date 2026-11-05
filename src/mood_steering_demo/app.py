@@ -274,8 +274,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--model", required=True, help="chemin du GGUF")
     parser.add_argument("--vector", help="GGUF controlvector (sinon repli sur le prompt)")
     parser.add_argument("--max-scale", type=float, default=DEFAULT_MAX_SCALE)
-    parser.add_argument("--il-start", type=int, default=1)
-    parser.add_argument("--il-end", type=int)
+    parser.add_argument("--il-start", type=int, default=1, help="première couche (incluse)")
+    parser.add_argument(
+        "--il-end", type=int, help="dernière couche (incluse ; défaut : min(lignes, n_layer - 1))"
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(argv)

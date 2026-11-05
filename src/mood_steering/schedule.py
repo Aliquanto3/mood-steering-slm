@@ -2,6 +2,15 @@
 
 Un profil est un objet appelable ``dose_at(t) -> float`` (``t`` = index du token généré,
 à partir de 0), borné dans [-1, 1]. Le module ne dépend ni du moteur ni de numpy.
+
+Calendrier (``Steerer.open_stream``) : la dose ``schedule(t)`` est posée juste avant
+l'évaluation dont les logits donnent le token ``t`` ; elle agit donc sur ce token même, et
+la dose du token 0 s'applique aussi à l'évaluation du prompt (un profil constant équivaut
+à ``--control-vector`` en CLI). Le pic 1.2 (``docs/pics/cvec-entre-tokens.md``) évaluait le
+prompt sans vecteur et indexait la dose par le token suivant (« posée avant le token N,
+agit sur N+1 ») : l'indice d'un profil ici est décalé d'un cran par rapport à ce protocole.
+Les doses sont validées dans [-1, 1] sans tolérance (avant l'arrondi à 10^-3 du Steerer).
+Génération gloutonne : la graine (``seed``) est sans effet sur le texte.
 """
 
 from __future__ import annotations

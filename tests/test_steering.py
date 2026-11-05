@@ -153,7 +153,8 @@ def test_un_seul_chargement_pour_deux_doses():
         (zeros(2), {"il_start": N_LAYER - 1}, "plage"),
         (zeros(2), {"il_end": N_LAYER}, "plage"),
         (zeros(2), {"il_start": 3, "il_end": 2}, "plage"),
-        (zeros(2), {"il_end": 4}, "couches fournies"),
+        (zeros(2), {"il_end": 4}, "plage"),  # au-delà des lignes du vecteur
+        (zeros(2), {"il_start": 3}, "plage"),
     ],
 )
 def test_validation(vector, kwargs, msg):
@@ -198,3 +199,33 @@ def test_vecteur_non_fini_rejete(bad):
 def test_max_scale_invalide(scale):
     with pytest.raises(ValueError, match="max_scale"):
         Steerer(FakeBackend(), make_vector(), max_scale=scale)
+
+
+def test_tampon_complet_offset_exact_llama_cpp():
+    """Contrat de ``llama_adapter_cvec::apply`` : couche il lue à l'offset n_embd × (il − 1)."""
+    b = FakeBackend()
+    v = make_vector(N_LAYER - 1)  # vecteur complet, ligne 0 = couche 1
+    Steerer(b, v, max_scale=1.0, il_start=2, il_end=4).generate("x", 1.0)
+    data, n_embd, start, end = b.cvec_calls[-1]
+    assert (n_embd, start, end) == (N_EMBD, 2, 4)
+    assert data.shape == (4 * N_EMBD,)  # il_end lignes, couches > il_end absentes
+    for il in range(1, end + 1):  # lecture comme llama.cpp
+        row = data[N_EMBD * (il - 1) : N_EMBD * il]
+        expected = np.zeros(N_EMBD) if il < start else v[il - 1]
+        np.testing.assert_array_equal(row, expected)
+
+
+def test_il_end_par_defaut_borne_par_le_modele():
+    b = FakeBackend()
+    Steerer(b, make_vector(N_LAYER + 2), il_start=3).generate("x", 0.5)
+    data, _, start, end = b.cvec_calls[-1]
+    assert (start, end) == (3, N_LAYER - 1)
+    assert data.shape == ((N_LAYER - 1) * N_EMBD,)
+    assert not data[: 2 * N_EMBD].any()
+
+
+def test_vecteur_appelant_non_modifie():
+    v = make_vector(N_LAYER - 1)
+    keep = v.copy()
+    Steerer(FakeBackend(), v, il_start=3).generate("x", 1.0)
+    np.testing.assert_array_equal(v, keep)

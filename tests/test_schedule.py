@@ -1,5 +1,7 @@
 """Tests du module schedule et de son branchement dans le Steerer (backend simulé)."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -176,7 +178,23 @@ def test_repli_signe_du_premier_token():
     b = FakeBackend()
     st = Steerer(b)  # sans vecteur
     ts = st.open_stream("q", schedule=pulse(2, 0.8, 3), system="Sois bref.", max_tokens=4)
-    assert (ts.arm, ts.fallback) == (ARM_STEERING, False)  # dose 0 au token 0 : pas de repli
+    # dose 0 au token 0 : le repli suit la première dose non nulle (token 1)
+    assert (ts.arm, ts.fallback, ts.dose) == (ARM_PROMPT_JOYFUL, True, 0.0)
+    list(ts)
+    assert b.system == f"{JOYFUL_SYSTEM_PROMPT}\n\nSois bref."
+
+    ts = st.open_stream("q", schedule=pulse(2, -0.8, 3), max_tokens=4)
+    assert (ts.arm, ts.fallback) == (ARM_PROMPT_SAD, True)
+    list(ts)
+
+    ts = st.open_stream("q", schedule=constant(0.0), system="Sois bref.", max_tokens=4)
+    assert (ts.arm, ts.fallback) == (ARM_STEERING, False)  # profil nul : pas de repli
+    list(ts)
+    assert b.system == "Sois bref."
+
+    # première dose non nulle au-delà de max_tokens : pas de repli
+    ts = st.open_stream("q", schedule=lambda t: 0.0 if t < 5 else 0.5, max_tokens=5)
+    assert (ts.arm, ts.fallback) == (ARM_STEERING, False)
     list(ts)
 
     ts = st.open_stream("q", schedule=pulse(0, 0.8, 3), system="Sois bref.", max_tokens=4)
@@ -203,20 +221,27 @@ def test_appels_existants_sans_schedule():
 
 
 class _FakeLlama:
-    """Faux Llama : tokens d'octets UTF-8 jamais complets (0xC3 seul), EOS jamais émis."""
+    """Faux Llama (frontière externe) : 7 = 0xC3 seul, 8 = suite de « é », 6 = 0xFF
+    invalide, autres = « ok » ; fins de génération : 99 (EOS) et 98 (EOT)."""
 
-    def __init__(self, tokens):
+    def __init__(self, tokens, n_ctx=2048, n_prompt=2):
         self.tokens = tokens
         self.evals = []
         self.resets = 0
         self.metadata = {}
+        self._n_ctx = n_ctx
+        self._n_prompt = n_prompt
+        self._model = SimpleNamespace(vocab="vocab")
+
+    def n_ctx(self):
+        return self._n_ctx
 
     def reset(self):
         self.resets += 1
         self.evals = []
 
     def tokenize(self, data, add_bos=False, special=False):
-        return [1, 2]
+        return list(range(1, self._n_prompt + 1))
 
     def token_eos(self):
         return 99
@@ -228,14 +253,15 @@ class _FakeLlama:
         return self.tokens[len(self.evals) - 1]
 
     def detokenize(self, toks):
-        return b"\xc3" if toks[0] == 7 else "é".encode()[1:] if toks[0] == 8 else b"ok"
+        return {7: b"\xc3", 8: "é".encode()[1:], 6: b"\xff"}.get(toks[0], b"ok")
 
 
-def _backend(tokens):
+def _backend(tokens, **kw):
     from mood_steering.steering import LlamaCppBackend
 
     b = LlamaCppBackend.__new__(LlamaCppBackend)
-    b._llm = _FakeLlama(tokens)
+    b._llm = _FakeLlama(tokens, **kw)
+    b._cpp = SimpleNamespace(llama_vocab_is_eog=lambda vocab, tok: vocab == "vocab" and tok > 97)
 
     class _Fmt:
         prompt = "P"
@@ -248,7 +274,7 @@ def test_llama_boucle_s_arrete_a_max_tokens_sans_utf8_complet():
     b = _backend([7] * 50)
     calls = []
     out = list(b.stream_scheduled("q", None, 5, 0, calls.append))
-    assert out == []  # aucun fragment complet
+    assert out == ["\ufffd"] * 4  # 0xC3 suivi de 0xC3 : invalide ; le dernier, coupé, abandonné
     assert calls == [0, 1, 2, 3, 4]
     assert len(b._llm.evals) == 5  # prompt + 4 tokens : pas un de plus
     assert b._llm.resets == 1
@@ -259,3 +285,53 @@ def test_llama_boucle_recolle_les_octets_et_s_arrete_a_eos():
     assert list(b.stream("q", None, 10, 0)) == ["é", "ok"]
     assert b.generate("q", None, 10, 0) == "éok"
     assert b._llm.evals[-1] == [5]
+
+
+def test_llama_octet_invalide_ne_bloque_pas_la_suite():
+    b = _backend([6, 5, 7, 8, 5, 99])
+    assert b.generate("q", None, 10, 0) == "\ufffdokéok"
+
+
+def test_llama_arret_sur_tout_token_de_fin():
+    b = _backend([5, 98, 5])  # 98 : fin de tour (EOT), pas EOS
+    assert list(b.stream("q", None, 10, 0)) == ["ok"]
+
+
+def test_llama_max_tokens_borne_par_le_contexte():
+    b = _backend([5] * 50, n_ctx=10, n_prompt=7)
+    calls = []
+    assert list(b.stream_scheduled("q", None, 100, 0, calls.append)) == ["ok"] * 3
+    assert calls == [0, 1, 2]
+
+
+def test_llama_prompt_trop_long_erreur_claire_a_l_ouverture():
+    b = _backend([5], n_ctx=8, n_prompt=8)
+    with pytest.raises(ValueError, match="contexte de 8 tokens"):
+        b.stream_scheduled("q", None, 4, 0, lambda t: None)  # avant toute itération
+
+
+def test_llama_formateur_sans_bos():
+    from mood_steering.steering import LlamaCppBackend
+
+    b = LlamaCppBackend.__new__(LlamaCppBackend)
+    seen = []
+    b._llm = SimpleNamespace(_model=SimpleNamespace(token_get_text=lambda t: seen.append(t) or "x"))
+    assert b._token_text(-1) == "" and seen == []
+    assert b._token_text(3) == "x" and seen == [3]
+
+
+def test_dose_validee_sans_tolerance_a_l_ouverture_et_en_flux():
+    st = Steerer(FakeBackend(), vec())
+    with pytest.raises(ValueError, match="dose"):
+        st.open_stream("q", schedule=lambda t: 1.0004)
+    ts = st.open_stream("q", schedule=lambda t: 1.0 if t == 0 else 1.0004, max_tokens=3)
+    it = iter(ts)
+    next(it)
+    with pytest.raises(ValueError, match="dose"):
+        next(it)
+
+
+def test_repli_sans_vecteur_valide_le_profil_a_l_ouverture():
+    st = Steerer(FakeBackend())
+    with pytest.raises(ValueError, match="dose"):
+        st.open_stream("q", schedule=lambda t: 0.0 if t < 2 else 1.5, max_tokens=4)
