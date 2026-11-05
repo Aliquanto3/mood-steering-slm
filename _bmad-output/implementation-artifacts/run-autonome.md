@@ -219,3 +219,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:58 · 2.3 · décision · contrat du tampon : Steerer prend le vecteur complet (ligne 0 = couche 1) et il_start/il_end ; tampon envoyé de il_end lignes, lignes avant il_start à zéro ; à corriger dans la revue de 2.3 · —
 - 2026-11-05 02:00 · 1.4 · CI · verte sur les trois OS · 1570dc9
 - 2026-11-05 02:00 · 1.4 · fusion · #14 fusionnée, MERGED vérifié ; Epic 1 terminé · 37452a7
+- 2026-11-05 02:01 · 6.1 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; place libre : 3.5 attend la fusion de 2.3) · —
