@@ -223,3 +223,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:02 · 2.3 · second-avis · 2 high (repli sur schedule(0) seul, UTF-8 invalide perd la suite), 3 medium (EOG, n_ctx, calendrier), 4 low · —
 - 2026-11-05 02:02 · 2.3 · décision · repli selon le premier schedule(t) non nul ; la dose du token t agit sur ses logits, profil constant appliqué au prompt (comme la CLI) · —
 - 2026-11-05 02:02 · 2.3 · review · passe 1 lancée (avec le contrat du tampon cvec) · —
+- 2026-11-05 02:04 · 6.1 · dev · fini, 22 tests ; direction du MIT trouvée dans slm-weight-editing (delta rang 1, couches 15 et 19, dim 1024), non exportée · 3e6b1a9
+- 2026-11-05 02:04 · 6.1 · second-avis · lancé · —
