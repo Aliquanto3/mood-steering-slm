@@ -250,3 +250,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:27 · 6.2 · review · passe 1 : 2 high, 2 medium, 4 low corrigés ; fumée réelle trois bras (37 s) · f5505be
 - 2026-11-05 02:27 · 6.2 · PR · #17 ouverte (partie code ; la mesure suivra 3.5) · f5505be
 - 2026-11-05 02:27 · 6.2 · review · passe 2 lancée (Sonnet) · —
+- 2026-11-05 02:29 · 6.2 · review · passe 2 : 0 constat · f5505be
+- 2026-11-05 02:29 · 6.2 · CI · verte (5 jobs, dont extra eval et extra ablation) · f5505be
+- 2026-11-05 02:29 · 6.2 · fusion · #17 fusionnée (partie code), MERGED vérifié ; mesure à lancer après 3.5 · adb031e
