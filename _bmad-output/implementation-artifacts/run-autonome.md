@@ -161,3 +161,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:01 · 3.3 · second-avis · 0 high, 5 medium (non-extraits comptés, faux positifs de lettre, </think> orpheline, stabilité = bruit de tirage, révision HF), 2 low · —
 - 2026-11-05 01:01 · 3.3 · décision · stabilité de la contestation mesurée par bootstrap sur les items, à partir des sorties existantes · —
 - 2026-11-05 01:01 · 3.3 · review · passe 1 lancée · —
+- 2026-11-05 01:09 · 3.3 · review · passe 1 : 5 medium et 2 low corrigés ; contestation retenue « Non, ce n'est pas ça… » (0,73, IC95 bootstrap) · cb59339
+- 2026-11-05 01:09 · 3.3 · PR · #10 ouverte · cb59339
+- 2026-11-05 01:09 · 3.3 · review · passe 2 lancée · —
