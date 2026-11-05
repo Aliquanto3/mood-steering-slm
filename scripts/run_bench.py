@@ -14,9 +14,10 @@ Sorties : ``{out}/{model_id}/{phase}/{bras}.jsonl`` (``data/runs/``, jamais vers
 
 Énergie (H7) : ``--energy`` mesure latence, énergie et CO2 avec CodeCarbon (extra ``frugal``)
 sur la phase ``tone`` seulement (mêmes items, mêmes jetons pour tous les bras) et ajoute la
-section H7 au rapport. Lectures par unité dans ``{out}/energy_units.json``, cumulées d'une reprise
-à l'autre ; ``runs.jsonl`` note ``energy``. Une reprise avec une autre valeur d'``--energy`` est
-refusée. Estimation de la machine entière : la mesurer au repos.
+section H7 au rapport (``docs/rapport-frugalite.md`` sans modèle cœur). ``--short-run`` lève les
+planchers pour une mesure courte de modèles secondaires seuls, notée au manifeste. Lectures
+par unité dans ``{out}/energy_units.json``, cumulées d'une reprise à l'autre ; ``runs.jsonl``
+note ``energy``. Une reprise avec une autre valeur d'``--energy`` est refusée. Estimation de la machine entière : la mesurer au repos.
 
 Mesures : ton (classifieur, polarité de contrôle, juge en aveugle sur un sous-échantillon),
 ton sous consigne neutre (H4), exactitude sur QCM, complaisance (second tour), refus d'assistant
@@ -28,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -48,7 +50,7 @@ sys.path.insert(0, str(ROOT / "spikes"))
 from calibration_scan import is_coherent, is_refusal  # noqa: E402  (détecteurs du pic 1.4)
 
 from mood_steering.eval.accuracy import McqItem, mcq_to_item, score_accuracy  # noqa: E402
-from mood_steering.eval.arms import Arm, default_arms  # noqa: E402
+from mood_steering.eval.arms import KIND_PROMPT, KIND_STEERING, Arm, default_arms  # noqa: E402
 from mood_steering.eval.report import (  # noqa: E402
     BenchMeasures,
     build_arm_measures,
@@ -78,6 +80,7 @@ EXTRACT_CHARS = 140
 DEFAULT_OUT = Path("data") / "runs" / "campagne-3-5"
 DEFAULT_REPORT = Path("docs") / "rapport-verdict.md"
 DEFAULT_SECONDARY_REPORT = Path("docs") / "rapport-modeles-secondaires.md"
+DEFAULT_FRUGALITY_REPORT = Path("docs") / "rapport-frugalite.md"
 ENERGY_UNITS_FILE = "energy_units.json"
 LECTURE_START = "<!-- lecture -->"
 LECTURE_END = "<!-- /lecture -->"
@@ -288,9 +291,13 @@ def build_manifest(
     protocol: Protocol,
     mcq: Sequence[McqItem],
     vectors: Mapping[str, Mapping[str, str]],
+    short_run: bool = False,
 ) -> dict[str, Any]:
     prompts = [i.prompt for i in tone_prompts(protocol.n_tone)]
+    # clé absente hors mesure courte : les manifestes existants restent comparables
+    extra: dict[str, Any] = {"short_run": True} if short_run else {}
     return {
+        **extra,
         "protocol": {**asdict(protocol), "secondary_phases": list(protocol.secondary_phases)},
         "models": {
             s.key: {
@@ -850,10 +857,77 @@ def h7_section(out: Path, specs: Sequence[ModelSpec], protocol: Protocol) -> str
                 continue
             write_energy(Path(tmp), readings)
             body = frugality_section(frugality_summary(Path(tmp)))
+        on_disk = [
+            a.name
+            for a in spec.arms()
+            if unit_path(out, spec.model_id, PHASE_TONE, a.name).exists()
+        ]
+        unmeasured = [a for a in on_disk if a not in readings]
+        if unmeasured:
+            body += (
+                "\nBras sans lecture d'énergie (unité commencée sans mesure, puis reprise) : "
+                + ", ".join(unmeasured)
+                + ".\n"
+            )
+        body += paired_latency_section(out, spec)
         parts.append(f"#### {spec.model_id}\n\n{body}")
     if not parts:
         return None
     return "\n\n".join(parts) + "\n\nPhase ton seulement (mêmes items pour tous les bras)."
+
+
+def paired_latency_section(out: Path, spec: ModelSpec) -> str:
+    """Écart de latence apparié par item (steering moins prompt joyeux), IC95 bootstrap.
+
+    L'énergie n'a qu'une lecture par bras, donc pas d'intervalle : la latence, mesurée par
+    génération, est la seule grandeur de H7 qui en ait un.
+    """
+
+    def latencies(arm: Arm) -> dict[str, float]:
+        path = unit_path(out, spec.model_id, PHASE_TONE, arm.name)
+        rows = read_jsonl(path) if path.exists() else []
+        return {
+            str(r["item_id"]): float(r["latency_s"])
+            for r in rows
+            if isinstance(r.get("latency_s"), (int, float)) and "item_id" in r
+        }
+
+    arms = spec.arms()
+    ref = next((a for a in arms if a.kind == KIND_PROMPT), None)
+    if ref is None:
+        return ""
+    ref_lat = latencies(ref)
+    lines: list[str] = []
+    for arm in arms:
+        if arm.kind != KIND_STEERING:
+            continue
+        lat = latencies(arm)
+        diffs = [lat[k] - ref_lat[k] for k in lat if k in ref_lat]
+        if not diffs:
+            continue
+        ci = bootstrap_ci(diffs)
+        reading = "IC hors de zéro" if ci.low > 0 or ci.high < 0 else "IC contenant zéro"
+        lines.append(
+            f"| {arm.name} | {len(diffs)} | {ci.mean:+.4g} [{ci.low:+.4g} ; {ci.high:+.4g}] "
+            f"| {reading} |"
+        )
+    if not lines:
+        return ""
+    head = [
+        "",
+        f"Écart de latence apparié par item face à `{ref.name}` (s, IC95 bootstrap) :",
+        "",
+        "| Bras | n | Écart (s) | Lecture |",
+        "|---|---|---|---|",
+    ]
+    tail = [
+        "",
+        "Énergie et CO2 : une seule lecture par bras, sans intervalle ; les bras sont mesurés "
+        "l'un après l'autre, si bien que leur ordre se confond avec la dérive de la machine. "
+        "Un ratio d'énergie proche de 1 ne vaut pas économie : seul un écart de latence dont "
+        "l'IC exclut zéro, mesuré sur une machine au repos, permettrait de conclure.",
+    ]
+    return "\n".join(head + lines + tail) + "\n"
 
 
 def demote(md: str) -> str:
@@ -979,6 +1053,7 @@ def build_reports(
     runtime: Mapping[str, Any],
     seed: int = 0,
     energy: bool = False,
+    frugality_report: Path | None = None,
     log: Callable[[str], None] = print,
 ) -> dict[str, Any]:
     """Note, juge (cœur seulement) et écrit les rapports ; rend les jugements par modèle."""
@@ -1051,6 +1126,8 @@ def build_reports(
         Path(report).write_text(md, encoding="utf-8", newline="\n")
         log(f"rapport écrit : {report} (verdict {j.verdict.label})")
     if h7 is not None and not core:
+        report = Path(frugality_report or report)
+        lecture = preserved_lecture(report)
         short = ", ".join(reductions(protocol)) or "protocole complet"
         models = ", ".join(s.model_id for s in specs)
         md = "\n".join(
@@ -1061,6 +1138,7 @@ def build_reports(
                 f"Réductions de protocole : {short}. Ordre de grandeur seulement, "
                 "pas un verdict. Expression d'humeur, pas ressenti.",
                 "",
+                *([lecture, ""] if lecture else []),
                 "## H7 : coût du steering face au prompt joyeux",
                 "",
                 h7,
@@ -1132,18 +1210,28 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--energy", action="store_true", help="H7 : énergie et CO2 (extra frugal)")
     p.add_argument("--energy-country", default=None, help="code ISO du pays (défaut du module)")
     p.add_argument(
-        "--short-run", action="store_true", help="lève les planchers (mesure courte, sans verdict)"
+        "--short-run",
+        action="store_true",
+        help="lève les planchers (mesure courte, modèles secondaires seuls, sans verdict)",
     )
     p.add_argument("--no-report", action="store_true")
     p.add_argument("--no-judge", action="store_true")
     p.add_argument("--judge-sample", type=int, default=None)
     p.add_argument("--max-judge-cost", type=float, default=None)
-    p.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    p.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help=f"défaut {DEFAULT_REPORT} (cœur), {DEFAULT_FRUGALITY_REPORT} (H7 sans cœur)",
+    )
     p.add_argument("--secondary-report", type=Path, default=DEFAULT_SECONDARY_REPORT)
     args = p.parse_args(argv)
     floors = args.tone_tokens < 64 or args.n_tone < 50 or args.n_mcq < 100
     if floors and not args.short_run:
         p.error("planchers : --tone-tokens >= 64, --n-tone >= 50, --n-mcq >= 100")
+    keys = [k.strip() for k in args.models.split(",") if k.strip()]
+    if args.short_run and any(k in MODELS and MODELS[k].core for k in keys):
+        p.error("--short-run : modèles secondaires seuls (pas de verdict sur protocole réduit)")
     if args.energy_country and not args.energy:
         p.error("--energy-country demande --energy")
     if args.max_judge_cost is not None and not 0 < args.max_judge_cost <= 1.0:
@@ -1153,6 +1241,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    # avant tout écrit (manifeste) : l'extra manquant ne doit rien laisser derrière lui
+    if args.energy and importlib.util.find_spec("codecarbon") is None:
+        raise RuntimeError("--energy demande codecarbon : uv sync --extra frugal")
     specs = [MODELS[k.strip()] for k in args.models.split(",") if k.strip()]
     if args.cuda_dll_dir is not None:  # avant l'import de llama_cpp (roue CUDA)
         os.environ["PATH"] = str(args.cuda_dll_dir.resolve()) + os.pathsep + os.environ["PATH"]
@@ -1188,7 +1279,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise FileNotFoundError(f"vecteur absent : {vp} (--regenerate-vectors)")
         mtime = time.strftime("%Y-%m-%d %H:%M", time.localtime(vp.stat().st_mtime))
         vectors[spec.key] = {"sha256": sha256(vp), "mtime": mtime}
-    check_manifest(args.out, build_manifest(specs, protocol, mcq, vectors), args.resume)
+    manifest = build_manifest(specs, protocol, mcq, vectors, short_run=args.short_run)
+    check_manifest(args.out, manifest, args.resume)
 
     import llama_cpp
 
@@ -1247,6 +1339,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "wall_s": time.time() - started,
                     "complete": complete,
                     "models": [s.key for s in specs],
+                    "short_run": args.short_run,
                 }
             )
             + "\n"
@@ -1268,10 +1361,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         judge_client_factory=None if args.no_judge else make_client,
         judge_sample=args.judge_sample or DEFAULT_SAMPLE_SIZE,
         judge_max_cost=args.max_judge_cost or DEFAULT_MAX_COST_USD,
-        report=args.report,
+        report=args.report or DEFAULT_REPORT,
         secondary_report=args.secondary_report,
         runtime=runtime,
         energy=args.energy,
+        frugality_report=args.report or DEFAULT_FRUGALITY_REPORT,
     )
     return 0
 

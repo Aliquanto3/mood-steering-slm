@@ -532,7 +532,29 @@ def test_cli_energy_options_and_short_run():
         rb.parse_args(["--energy-country", "DEU"])
     with pytest.raises(SystemExit):
         rb.parse_args(["--n-tone", "10"])
-    assert rb.parse_args(["--n-tone", "10", "--short-run"]).n_tone == 10
+    short = ["--n-tone", "10", "--short-run"]
+    assert rb.parse_args([*short, "--models", "0.8b"]).n_tone == 10
+    # protocole réduit : pas de modèle cœur, donc jamais de verdict ni d'écriture du rapport 3.5
+    with pytest.raises(SystemExit):
+        rb.parse_args(short)
+    with pytest.raises(SystemExit):
+        rb.parse_args([*short, "--models", "4b,0.8b"])
+    assert rb.parse_args([]).report is None
+
+
+def test_short_run_recorded_in_manifest_only_when_set():
+    spec = rb.MODELS["0.8b"]
+    protocol = rb.Protocol(n_tone=10, n_mcq=6, secondary_phases=("tone",))
+    plain = rb.build_manifest([spec], protocol, mcq_items(), {spec.key: {}})
+    short = rb.build_manifest([spec], protocol, mcq_items(), {spec.key: {}}, short_run=True)
+    assert "short_run" not in plain and short["short_run"] is True
+
+
+def test_energy_without_extra_writes_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(rb.importlib.util, "find_spec", lambda name: None)
+    with pytest.raises(RuntimeError, match="extra frugal"):
+        rb.main(["--energy", "--out", str(tmp_path / "run")])
+    assert not (tmp_path / "run").exists()
 
 
 def test_h7_short_report_when_no_core_model(tmp_path):
@@ -554,3 +576,30 @@ def test_h7_short_report_when_no_core_model(tmp_path):
     assert "#### Qwen3.5-0.8B-Q4_K_M" in text and "| neutral | 10 |" in text
     assert "| 0.001 | 0.0001 | 0.0001 | 1e-05 |" in text
     assert "estimation, pas une mesure au wattmètre" in text
+    # écart de latence apparié par item, avec IC, et pas de conclusion d'économie
+    assert "Écart de latence apparié par item face à `prompt_joyful`" in text
+    assert "| steering_p1.00 | 10 |" in text and "IC " in text and "ne vaut pas économie" in text
+    # bloc de lecture rédigé à la main conservé à la régénération
+    lecture = f"{rb.LECTURE_START}\nCPU partagé.\n{rb.LECTURE_END}"
+    (tmp_path / "frugalite.md").write_text(text.replace("## H7", lecture + "\n\n## H7"), "utf-8")
+    rb.build_reports(
+        tmp_path, [spec], protocol, mcq_items(), FakeScorer(), judge_client_factory=None,
+        judge_sample=20, judge_max_cost=1.0, report=tmp_path / "verdict.md",
+        frugality_report=tmp_path / "frugalite.md",
+        secondary_report=tmp_path / "secondaires.md", energy=True,
+        runtime={"llama_cpp": "0.0", "device": "CPU"}, log=lambda s: None,
+    )  # fmt: skip
+    assert not (tmp_path / "verdict.md").exists()
+    assert lecture in (tmp_path / "frugalite.md").read_text(encoding="utf-8")
+
+
+def test_h7_names_arm_without_energy_reading(tmp_path):
+    spec = rb.MODELS["0.8b"]
+    protocol = rb.Protocol(n_tone=10, n_mcq=6, secondary_phases=("tone",))
+    kw = _tone_kw()
+    rb.run_campaign([spec], protocol, tmp_path, mcq_items(), deadline=time.monotonic() - 1, **kw)
+    rb.run_campaign([spec], protocol, tmp_path, mcq_items(), energy_tracker=FakeTracker(), **kw)
+    text = rb.h7_section(tmp_path, [spec], protocol)
+    assert (
+        "Bras sans lecture d'énergie (unité commencée sans mesure, puis reprise) : neutral." in text
+    )

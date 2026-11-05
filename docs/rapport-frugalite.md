@@ -2,13 +2,22 @@
 
 > **Mesure courte, Qwen3.5-0.8B-Q4_K_M, CPU, n réduit.** Réductions de protocole : sorties de ton limitées à 64 tokens (cible 128), 10 prompts de ton (cible 100), 10 QCM (cible 200), modèles secondaires sans les phases tone_neutral, mcq, syco, syco_fixed. Ordre de grandeur seulement, pas un verdict. Expression d'humeur, pas ressenti.
 
+<!-- lecture -->
+**Lecture (rédigée à la main, conservée à la régénération).** Conditions de cette mesure : CPU partagé avec un autre agent (mesure 6.2 sur GPU et sa préparation), donc machine qui n'était pas au repos ; n = 10 générations par bras, une seule lecture CodeCarbon par bras, bras mesurés l'un après l'autre, si bien que leur ordre se confond avec la dérive de la charge.
+
+- Énergie et CO2 : **pas d'écart détectable à cette résolution**. Les ratios inférieurs à 1 sont des lectures uniques, sans intervalle, et ne montrent pas une économie du steering.
+- Latence : l'écart apparié par item exclut zéro pour chaque bras de steering, qui va de 0,05 à 0,14 s plus vite par génération que le prompt joyeux. C'est cohérent avec le prompt système du bras joyeux, plus long à traiter, mais avec une machine chargée et un ordre des bras non alterné, la mesure ne suffit pas à l'établir.
+
+Une conclusion demanderait une mesure sur une machine au repos, avec plusieurs lectures par bras et un ordre des bras alterné.
+<!-- /lecture -->
+
 ## H7 : coût du steering face au prompt joyeux
 
 #### Qwen3.5-0.8B-Q4_K_M
 
 Latence par génération (moyenne, IC95 bootstrap), énergie et CO2 par bras.
 
-| Bras | n | Latence (s) | Latence/mot (approx. tokens) (s) | Énergie (kWh) | CO2 (kg) | Énergie/gén. (kWh) | CO2/gén. (kg) |
+| Bras | n | Latence (s) | Latence par mot (s/mot) | Énergie (kWh) | CO2 (kg) | Énergie/gén. (kWh) | CO2/gén. (kg) |
 |---|---|---|---|---|---|---|---|
 | neutral | 10 | 1.342 [1.295 ; 1.397] | 0.03084 [0.02682 ; 0.03553] | 0.0003703 | 2.075e-05 | 3.703e-05 | 2.075e-06 |
 | prompt_joyful | 10 | 1.382 [1.358 ; 1.409] | 0.02943 [0.02847 ; 0.03042] | 0.0003822 | 2.142e-05 | 3.822e-05 | 2.142e-06 |
@@ -32,6 +41,19 @@ Surcoût du steering face à `prompt_joyful` (ratio ; différence) :
 
 Limite de mesure : CodeCarbon estime la consommation de la machine entière (CPU, GPU, mémoire) à partir de modèles et de facteurs d'émission du pays : c'est une estimation, pas une mesure au wattmètre. Une autre charge simultanée sur la machine fausse la mesure ; les bras doivent être mesurés sur une machine par ailleurs au repos.
 Les tokens sont comptés par mots de la sortie (approximation) en l'absence de `n_tokens` dans le JSONL.
+
+Écart de latence apparié par item face à `prompt_joyful` (s, IC95 bootstrap) :
+
+| Bras | n | Écart (s) | Lecture |
+|---|---|---|---|
+| steering_p0.67 | 10 | -0.144 [-0.2718 ; -0.06473] | IC hors de zéro |
+| steering_p0.83 | 10 | -0.1442 [-0.2546 ; -0.07144] | IC hors de zéro |
+| steering_p1.00 | 10 | -0.0864 [-0.1034 ; -0.0685] | IC hors de zéro |
+| steering_m0.67 | 10 | -0.07643 [-0.1165 ; -0.0361] | IC hors de zéro |
+| steering_m0.83 | 10 | -0.0567 [-0.09206 ; -0.02616] | IC hors de zéro |
+| steering_m1.00 | 10 | -0.0548 [-0.07461 ; -0.03459] | IC hors de zéro |
+
+Énergie et CO2 : une seule lecture par bras, sans intervalle ; les bras sont mesurés l'un après l'autre, si bien que leur ordre se confond avec la dérive de la machine. Un ratio d'énergie proche de 1 ne vaut pas économie : seul un écart de latence dont l'IC exclut zéro, mesuré sur une machine au repos, permettrait de conclure.
 
 
 Phase ton seulement (mêmes items pour tous les bras).
