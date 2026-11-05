@@ -356,3 +356,7 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 20:54 · A5 · dev · lancé (Sonnet, worktree), cadrage story-a5-mise-en-commun.md · —
 - 2026-11-05 21:00 · A2 · pilote · origine 60 % tronquées [30 ; 90], n=10, 2048 tokens, ~54 s/item : sous 80 %, plafond 2048 retenu · —
 - 2026-11-05 21:00 · A2 · mesure · lancée (4 bras, n=50, 2048 tokens, GPU, ~3 h) · —
+- 2026-11-05 21:08 · A5 · dev · fini : 498 passés ; aucun verdict publié ne change (taille identique sur 18 bras, H5 bornes décalées de 0,01 à 0,05) · 3890be9
+- 2026-11-05 21:08 · A5 · second-avis · 0 high, 1 medium (stop() du traqueur d'énergie masque l'exception de l'unité), 6 low · 3890be9
+- 2026-11-05 21:08 · A5 · review · passe 1 lancée (Opus) · —
+- 2026-11-05 21:08 · A2 · contrôle croisé · slm-quality-bench wsp-20261104 think_on (plafond 4096) : tronquées 72,9 % (558/765) base, 43,2 % (333/770) wsp · —
