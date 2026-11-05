@@ -43,3 +43,9 @@ context:
 - Nit · low · second avis · rejeté : tirages nan écartés dans `paired_boot` ; les colonnes de `run_axis` sont filtrées des nan avant le bootstrap (moyennes), aucun tirage nan possible.
 - Nit · low · second avis · accepté : lecture arrêtée à la première ligne illisible en reprise, comportement antérieur, documenté dans `resumable`.
 - Complexité : 0 constat (lectures complètes une fois par reprise ou par rapport).
+
+### Passe 2 (2026-11-05, SHA revu 6966491)
+
+- Aucun Important. Correctif du `finally` : `except BaseException` conserve la lecture partielle, journalise l'échec du traqueur et relance l'exception de l'unité ; sur succès, l'échec de `stop()` lève. Les deux tests passent par `run_campaign` réel.
+- Nit · low · reporté : `runs.jsonl` est écrit en fin de campagne (une ligne), seule lecture stricte exposée à une ligne tronquée par un arrêt pendant cette écriture ; `ValueError` explicite, correction manuelle. Les unités terminées sont écrites via `.part` puis `os.replace` : aucune ligne tronquée légitime n'atteint `strict`. La reprise (`run_unit`, `run_pulse`) reste sur `read_rows` tolérant.
+- Complexité : 0 constat.
