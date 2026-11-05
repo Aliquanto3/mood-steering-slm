@@ -290,3 +290,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:11 · 5.3 · dev · branchement fini : --energy, H7 par bras, mesure courte 0.8B CPU (steering sans surcoût mesurable), --short-run ajouté · 05ce60c
 - 2026-11-05 05:11 · 5.3 · second-avis · lancé (Haiku) · 05ce60c
 - 2026-11-05 05:11 · 5.2 · dev · lancé (Sonnet, worktree), analyse des données 3.5 sans génération, 7-9B hors périmètre · —
+- 2026-11-05 05:13 · 5.3 · second-avis · 0 high, 3 medium (--short-run écrit le verdict par défaut, H7 seul écrase rapport-verdict, rapport frugalité sur-interprété), 4 low · 05ce60c
+- 2026-11-05 05:13 · 5.3 · review · lancée (Opus) · —
