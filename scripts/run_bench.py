@@ -19,6 +19,9 @@ planchers pour une mesure courte de modèles secondaires seuls, notée au manife
 par unité dans ``{out}/energy_units.json``, cumulées d'une reprise à l'autre ; ``runs.jsonl``
 note ``energy``. Une reprise avec une autre valeur d'``--energy`` est refusée.
 Estimation de la machine entière : la mesurer au repos.
+``--energy-repeats K`` : K tours de mesure à l'ordre des bras alterné (tour 0 noté, tours
+suivants énergie et latence seulement, lectures ``tone#r{r}``) ; ``--tone-only`` : phase ton
+seule, cœur compris, rapport de frugalité sans verdict (voir ``docs/rapport-frugalite.md``).
 
 Mesures : ton (classifieur, polarité de contrôle, juge en aveugle sur un sous-échantillon),
 ton sous consigne neutre (H4), exactitude sur QCM, complaisance (second tour), refus d'assistant
@@ -40,6 +43,7 @@ import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -84,6 +88,9 @@ DEFAULT_REPORT = Path("docs") / "rapport-verdict.md"
 DEFAULT_SECONDARY_REPORT = Path("docs") / "rapport-modeles-secondaires.md"
 DEFAULT_FRUGALITY_REPORT = Path("docs") / "rapport-frugalite.md"
 ENERGY_UNITS_FILE = "energy_units.json"
+# Ordre des bras par tour de mesure d'énergie (``--energy-repeats``) : le tour 0 est la
+# génération notée ; les tours pairs suivent l'ordre des bras, les tours impairs l'ordre inverse.
+ENERGY_ROUND_ORDER = "pairs : ordre des bras ; impairs : ordre inverse (tour 0 = sorties notées)"
 LECTURE_START = "<!-- lecture -->"
 LECTURE_END = "<!-- /lecture -->"
 
@@ -171,9 +178,13 @@ class Protocol:
     n_ctx: int = 2048
     # Phases des modèles secondaires : toutes par défaut ; « tone » seul si le temps manque.
     secondary_phases: tuple[str, ...] = PHASES
+    # Mesure d'énergie seule : phase ton pour tous les modèles, cœur compris (sans verdict).
+    tone_only: bool = False
 
 
 def phases_for(spec: ModelSpec, protocol: Protocol) -> tuple[str, ...]:
+    if protocol.tone_only:
+        return (PHASE_TONE,)
     return PHASES if spec.core else tuple(p for p in PHASES if p in protocol.secondary_phases)
 
 
@@ -280,13 +291,19 @@ def build_manifest(
     mcq: Sequence[McqItem],
     vectors: Mapping[str, Mapping[str, str]],
     short_run: bool = False,
+    energy_repeats: int = 1,
 ) -> dict[str, Any]:
     prompts = [i.prompt for i in tone_prompts(protocol.n_tone)]
     # clé absente hors mesure courte : les manifestes existants restent comparables
     extra: dict[str, Any] = {"short_run": True} if short_run else {}
+    if energy_repeats > 1:  # idem : K et la règle d'ordre figés, absents des campagnes à K = 1
+        extra |= {"energy_repeats": energy_repeats, "energy_round_order": ENERGY_ROUND_ORDER}
+    proto = {**asdict(protocol), "secondary_phases": list(protocol.secondary_phases)}
+    if not protocol.tone_only:
+        del proto["tone_only"]
     return {
         **extra,
-        "protocol": {**asdict(protocol), "secondary_phases": list(protocol.secondary_phases)},
+        "protocol": proto,
         "models": {
             s.key: {
                 **asdict(s),
@@ -335,18 +352,26 @@ def check_runtime(out: Path, runtime: Mapping[str, Any], pending: bool = True) -
     if not pending or not runs.exists():
         return
     now = (runtime.get("llama_cpp"), runtime.get("device"))
-    energy_now = (bool(runtime.get("energy", False)), runtime.get("energy_country"))
+    energy_now = (
+        bool(runtime.get("energy", False)),
+        runtime.get("energy_country"),
+        int(runtime.get("energy_repeats", 1)),
+    )
     for row in read_jsonl(runs):
         old = (row.get("llama_cpp"), row.get("device"))
         if old != now:
             raise ValueError(
                 f"reprise sous un autre environnement : {old} puis {now} (llama-cpp, device)"
             )
-        energy_old = (bool(row.get("energy", False)), row.get("energy_country"))
+        energy_old = (
+            bool(row.get("energy", False)),
+            row.get("energy_country"),
+            int(row.get("energy_repeats", 1)),
+        )
         if energy_old != energy_now:
             raise ValueError(
                 f"reprise avec une autre mesure d'énergie : {energy_old} puis {energy_now} "
-                "(--energy, --energy-country) ; unités incomparables"
+                "(--energy, --energy-country, --energy-repeats) ; unités incomparables"
             )
 
 
@@ -387,6 +412,70 @@ def save_energy_units(out: Path, units: Mapping[str, Any]) -> None:
     path.write_text(json.dumps(units, indent=1, sort_keys=True), "utf-8", newline="\n")
 
 
+def round_key(model_id: str, arm: str, rnd: int) -> str:
+    """Clé de ``energy_units.json`` : tour 0 = clé historique ; tour r > 0 = ``tone#r{r}``."""
+    phase = PHASE_TONE if rnd == 0 else f"{PHASE_TONE}#r{rnd}"
+    return f"{model_id}/{phase}/{arm}"
+
+
+def round_path(out: Path, model_id: str, arm: str, rnd: int) -> Path:
+    """JSONL d'un tour d'énergie > 0 (latence et énergie seulement, jamais notés)."""
+    if rnd == 0:
+        return unit_path(out, model_id, PHASE_TONE, arm)
+    return unit_path(out, model_id, f"{PHASE_TONE}_r{rnd}", arm)
+
+
+def round_order(arms: Sequence[Arm], rnd: int) -> list[Arm]:
+    """Règle d'alternance : tour pair dans l'ordre des bras, tour impair dans l'ordre inverse."""
+    return list(arms) if rnd % 2 == 0 else list(reversed(arms))
+
+
+def repeat_units(
+    spec: ModelSpec, protocol: Protocol, out: Path, repeats: int
+) -> list[tuple[int, Arm, Path]]:
+    """Unités des tours d'énergie 1..K-1, dans l'ordre de mesure (vide si K = 1 ou sans ton)."""
+    if repeats <= 1 or PHASE_TONE not in phases_for(spec, protocol):
+        return []
+    return [
+        (rnd, arm, round_path(out, spec.model_id, arm.name, rnd))
+        for rnd in range(1, repeats)
+        for arm in round_order(spec.arms(), rnd)
+    ]
+
+
+def _measured(
+    energy_tracker: Any,
+    energy_units: dict[str, dict[str, float]],
+    out: Path,
+    key: str,
+    tracked: bool,
+    run: Callable[[], bool],
+    log: Callable[[str], None],
+) -> bool:
+    """Exécute ``run`` sous le traqueur ; lecture cumulée dans ``energy_units`` (et sur disque).
+
+    Sur exception, la lecture partielle est conservée sans masquer l'erreur de l'unité.
+    """
+    if tracked:
+        energy_tracker.start()
+    try:
+        complete = run()
+    except BaseException:
+        if tracked:
+            try:  # lecture partielle conservée, sans masquer l'exception de l'unité
+                reading = energy_tracker.stop()
+                energy_units[key] = _add_reading(energy_units.get(key), reading)
+                save_energy_units(out, energy_units)
+            except Exception as exc:
+                log(f"{key} : arrêt du traqueur d'énergie en échec ({exc!r})")
+        raise
+    if tracked:
+        reading = energy_tracker.stop()
+        energy_units[key] = _add_reading(energy_units.get(key), reading)
+        save_energy_units(out, energy_units)
+    return complete
+
+
 def run_campaign(
     specs: Sequence[ModelSpec],
     protocol: Protocol,
@@ -398,6 +487,7 @@ def run_campaign(
     run_id: str = "campagne-3-5",
     deadline: float | None = None,
     energy_tracker: Any = None,
+    energy_repeats: int = 1,
     log: Callable[[str], None] = print,
 ) -> bool:
     """Génère toutes les unités (modèle x phase x bras) manquantes ; ``True`` si tout est écrit.
@@ -406,6 +496,9 @@ def run_campaign(
     donné, puis phases (ton, ton sous consigne neutre, QCM, second tour), puis bras.
     Avec ``energy_tracker``, chaque unité de la phase ton est mesurée ; les lectures sont
     cumulées dans ``energy_units.json`` (reprise d'une unité interrompue comprise).
+    ``energy_repeats`` = K > 1 : après la phase ton d'un modèle, K - 1 tours de mesure
+    supplémentaires (``repeat_units``, ordre alterné) régénèrent les prompts de ton, pour
+    l'énergie et la latence seulement ; seul le tour 0 est noté.
     """
     energy_units = load_energy_units(out) if energy_tracker is not None else {}
     tone = [
@@ -414,7 +507,8 @@ def run_campaign(
     first = [(mcq_to_item(m), item_seed(protocol.seed, k)) for k, m in enumerate(mcq)]
     for spec in specs:
         units = model_units(spec, protocol, out)
-        if all(p.exists() for _, _, p in units):
+        rounds = repeat_units(spec, protocol, out, energy_repeats if energy_tracker else 1)
+        if all(p.exists() for _, _, p in units) and all(p.exists() for _, _, p in rounds):
             log(f"{spec.model_id} : déjà complet")
             continue
         backend = backend_factory(spec)
@@ -425,7 +519,15 @@ def run_campaign(
             il_start=spec.il_start,
             il_end=spec.il_end,
         )
+        rounds_pending = bool(rounds)
         for phase, arm, path in units:
+            if rounds_pending and phase != PHASE_TONE:  # phase ton finie : tours d'énergie
+                if not _run_rounds(
+                    spec, steerer, protocol, out, tone, rounds, run_id, deadline,
+                    energy_tracker, energy_units, log,
+                ):  # fmt: skip
+                    return False
+                rounds_pending = False
             if path.exists():
                 continue
             t0 = time.monotonic()
@@ -450,10 +552,14 @@ def run_campaign(
                 # unité commencée sans lecture : énergie partielle, non publiée
                 and (key in energy_units or not path.with_name(path.name + ".part").exists())
             )
-            if tracked:
-                energy_tracker.start()
-            try:
-                complete = run_unit(
+            complete = _measured(
+                energy_tracker,
+                energy_units,
+                out,
+                key,
+                tracked,
+                partial(
+                    run_unit,
                     steerer,
                     arm,
                     items,
@@ -462,27 +568,71 @@ def run_campaign(
                     model_id=spec.model_id,
                     deadline=deadline,
                     **kw,
-                )
-            except BaseException:
-                if tracked:
-                    try:  # lecture partielle conservée, sans masquer l'exception de l'unité
-                        reading = energy_tracker.stop()
-                        energy_units[key] = _add_reading(energy_units.get(key), reading)
-                        save_energy_units(out, energy_units)
-                    except Exception as exc:
-                        log(f"{key} : arrêt du traqueur d'énergie en échec ({exc!r})")
-                raise
-            if tracked:
-                reading = energy_tracker.stop()
-                energy_units[key] = _add_reading(energy_units.get(key), reading)
-                save_energy_units(out, energy_units)
+                ),
+                log,
+            )
             log(
                 f"{spec.model_id} {phase} {arm.name} : {time.monotonic() - t0:.0f} s"
                 + ("" if complete else " (interrompu, à reprendre)")
             )
             if not complete:
                 return False
+        if rounds_pending and not _run_rounds(
+            spec, steerer, protocol, out, tone, rounds, run_id, deadline,
+            energy_tracker, energy_units, log,
+        ):  # fmt: skip
+            return False
         del steerer, backend
+    return True
+
+
+def _run_rounds(
+    spec: ModelSpec,
+    steerer: Steerer,
+    protocol: Protocol,
+    out: Path,
+    tone: Sequence[tuple[Item, int]],
+    rounds: Sequence[tuple[int, Arm, Path]],
+    run_id: str,
+    deadline: float | None,
+    energy_tracker: Any,
+    energy_units: dict[str, dict[str, float]],
+    log: Callable[[str], None],
+) -> bool:
+    """Tours d'énergie 1..K-1 de la phase ton ; ``False`` si l'échéance interrompt un tour."""
+    for rnd, arm, path in rounds:
+        if path.exists():
+            continue
+        t0 = time.monotonic()
+        key = round_key(spec.model_id, arm.name, rnd)
+        # tour commencé sans lecture : énergie partielle, non publiée (comme le tour 0)
+        tracked = key in energy_units or not path.with_name(path.name + ".part").exists()
+        complete = _measured(
+            energy_tracker,
+            energy_units,
+            out,
+            key,
+            tracked,
+            partial(
+                run_unit,
+                steerer,
+                arm,
+                tone,
+                path,
+                run_id=run_id,
+                model_id=spec.model_id,
+                max_tokens=protocol.tone_tokens,
+                extra={"energy_round": rnd},
+                deadline=deadline,
+            ),
+            log,
+        )
+        log(
+            f"{spec.model_id} tone tour {rnd} {arm.name} : {time.monotonic() - t0:.0f} s"
+            + ("" if complete else " (interrompu, à reprendre)")
+        )
+        if not complete:
+            return False
     return True
 
 
@@ -869,14 +1019,139 @@ def h7_section(out: Path, specs: Sequence[ModelSpec], protocol: Protocol) -> str
                 + ", ".join(unmeasured)
                 + ".\n"
             )
-        body += paired_latency_section(out, spec)
+        repeated = repeated_energy(out, spec, units)
+        body += paired_latency_section(out, spec, repeated=bool(repeated))
+        if repeated:
+            body += repeated_section(out, spec, repeated)
         parts.append(f"#### {spec.model_id}\n\n{body}")
     if not parts:
         return None
     return "\n\n".join(parts) + "\n\nPhase ton seulement (mêmes items pour tous les bras)."
 
 
-def paired_latency_section(out: Path, spec: ModelSpec) -> str:
+def repeated_energy(
+    out: Path, spec: ModelSpec, units: Mapping[str, Mapping[str, float]]
+) -> dict[int, dict[str, tuple[Mapping[str, float], int]]]:
+    """Lectures par tour (``--energy-repeats``) : ``{tour: {bras: (lecture, n générations)}}``.
+
+    Vide pour une campagne à K = 1 (aucune clé ``tone#r*``). Un tour sans lecture ou sans
+    JSONL fini n'y figure pas.
+    """
+    result: dict[int, dict[str, tuple[Mapping[str, float], int]]] = {}
+    top = 0
+    for k in units:
+        if k.startswith(f"{spec.model_id}/{PHASE_TONE}#r"):
+            top = max(top, int(k.split("/")[1].removeprefix(f"{PHASE_TONE}#r")))
+    if top == 0:
+        return {}
+    for rnd in range(top + 1):
+        for arm in spec.arms():
+            path = round_path(out, spec.model_id, arm.name, rnd)
+            u = units.get(round_key(spec.model_id, arm.name, rnd))
+            if u is not None and path.exists():
+                result.setdefault(rnd, {})[arm.name] = (u, len(read_jsonl(path)))
+    return result
+
+
+def repeated_section(
+    out: Path,
+    spec: ModelSpec,
+    repeated: Mapping[int, Mapping[str, tuple[Mapping[str, float], int]]],
+) -> str:
+    """Énergie et CO2 par génération sur K tours (moyenne, IC95 bootstrap) et ratio apparié."""
+    arms = spec.arms()
+    rounds = sorted(repeated)
+    lines = [
+        "",
+        f"Énergie et CO2 par génération sur {len(rounds)} tour(s) de mesure "
+        "(moyenne, IC95 bootstrap sur les tours ; le tableau ci-dessus ne garde que le tour 0) :",
+        "",
+        "| Bras | Tours | Énergie/gén. (kWh) | CO2/gén. (kg) |",
+        "|---|---|---|---|",
+    ]
+    per_gen: dict[str, dict[int, tuple[float, float]]] = {}
+    for arm in arms:
+        for rnd in rounds:
+            if (m := repeated[rnd].get(arm.name)) is not None:
+                reading, n = m
+                per_gen.setdefault(arm.name, {})[rnd] = (
+                    reading["energy_kwh"] / n,
+                    reading["emissions_kg"] / n,
+                )
+    for arm in arms:
+        by_round = per_gen.get(arm.name)
+        if not by_round:
+            continue
+        e = bootstrap_ci([v[0] for v in by_round.values()])
+        c = bootstrap_ci([v[1] for v in by_round.values()])
+        lines.append(
+            f"| {arm.name} | {len(by_round)} | {e.mean:.4g} [{e.low:.4g} ; {e.high:.4g}] "
+            f"| {c.mean:.4g} [{c.low:.4g} ; {c.high:.4g}] |"
+        )
+    ref = next((a for a in arms if a.kind == KIND_PROMPT), None)
+    ratio_lines: list[str] = []
+    if ref is not None and ref.name in per_gen:
+        for arm in arms:
+            if arm.kind != KIND_STEERING or arm.name not in per_gen:
+                continue
+            common = sorted(set(per_gen[arm.name]) & set(per_gen[ref.name]))
+            ratios = [
+                (per_gen[arm.name][r][0] / per_gen[ref.name][r][0],
+                 per_gen[arm.name][r][1] / per_gen[ref.name][r][1])
+                for r in common
+                if per_gen[ref.name][r][0] > 0 and per_gen[ref.name][r][1] > 0
+            ]  # fmt: skip
+            if not ratios:
+                continue
+            e = bootstrap_ci([x[0] for x in ratios])
+            c = bootstrap_ci([x[1] for x in ratios])
+            ratio_lines.append(
+                f"| {arm.name} | {len(ratios)} | x{e.mean:.4g} [{e.low:.4g} ; {e.high:.4g}] "
+                f"| x{c.mean:.4g} [{c.low:.4g} ; {c.high:.4g}] |"
+            )
+    if ratio_lines and ref is not None:
+        lines += [
+            "",
+            f"Ratio apparié par tour face à `{ref.name}` (chaque tour compare les bras mesurés "
+            "dans le même tour ; moyenne et IC95 bootstrap des ratios) :",
+            "",
+            "| Bras | Tours | Énergie/gén. | CO2/gén. |",
+            "|---|---|---|---|",
+            *ratio_lines,
+        ]
+    lines += [
+        "",
+        f"Ordre des bras alterné d'un tour à l'autre ({ENERGY_ROUND_ORDER}) ; seul le tour 0 "
+        "est noté, les autres ne servent qu'à l'énergie. Avec peu de tours, l'IC bootstrap est "
+        "grossier. Pas de verdict H7 : les seuils des hypothèses bonus ne sont pas "
+        "pré-enregistrés (action A6), ce rapport donne les mesures et leurs intervalles.",
+    ]
+    loads = _first_load(out)
+    if loads is not None:
+        lines.append(f"Relevé de charge au lancement : {loads}.")
+    return "\n".join(lines) + "\n"
+
+
+def _first_load(out: Path) -> str | None:
+    runs = Path(out) / "runs.jsonl"
+    if not runs.exists():
+        return None
+    for row in read_jsonl(runs):
+        load = row.get("load")
+        if isinstance(load, dict):
+            gpu = load.get("gpu")
+            gpu_txt = (
+                f"GPU {gpu['utilization_pct']} % ({gpu['memory_used_mib']} MiB)"
+                if isinstance(gpu, dict)
+                else "GPU non lisible"
+            )
+            cpu = load.get("cpu_percent")
+            cpu_txt = f"CPU {cpu:.0f} %" if isinstance(cpu, (int, float)) else "CPU non lisible"
+            return f"{gpu_txt}, {cpu_txt}"
+    return None
+
+
+def paired_latency_section(out: Path, spec: ModelSpec, repeated: bool = False) -> str:
     """Écart de latence apparié par item (steering moins prompt joyeux), IC95 bootstrap.
 
     L'énergie n'a qu'une lecture par bras, donc pas d'intervalle : la latence, mesurée par
@@ -927,6 +1202,12 @@ def paired_latency_section(out: Path, spec: ModelSpec) -> str:
         "Un ratio d'énergie proche de 1 ne vaut pas économie : seul un écart de latence dont "
         "l'IC exclut zéro, mesuré sur une machine au repos, permettrait de conclure.",
     ]
+    if repeated:
+        tail = [
+            "",
+            "Un ratio d'énergie proche de 1 ne vaut pas économie ; la latence ci-dessus vient du "
+            "tour 0 seul, mesuré sur une machine dont le repos n'est pas garanti.",
+        ]
     return "\n".join(head + lines + tail) + "\n"
 
 
@@ -964,8 +1245,10 @@ def reductions(protocol: Protocol) -> list[str]:
         notes.append(f"{protocol.n_tone} prompts de ton (cible 100)")
     if protocol.n_mcq < ref.n_mcq:
         notes.append(f"{protocol.n_mcq} QCM (cible 200)")
+    if protocol.tone_only:
+        notes.append("phase ton seule (énergie)")
     missing = [p for p in PHASES if p not in protocol.secondary_phases]
-    if missing:
+    if missing and not protocol.tone_only:
         notes.append(f"modèles secondaires sans les phases {', '.join(missing)}")
     return notes
 
@@ -1036,6 +1319,48 @@ def method_section(
         "",
     ]
     return "\n".join(lines)
+
+
+def write_frugality_report(
+    report: Path,
+    h7: str,
+    specs: Sequence[ModelSpec],
+    protocol: Protocol,
+    runtime: Mapping[str, Any],
+    log: Callable[[str], None] = print,
+) -> None:
+    """Écrit le rapport de frugalité autonome (section H7), bloc de lecture conservé."""
+    lecture = preserved_lecture(report)
+    models = ", ".join(s.model_id for s in specs)
+    if protocol.tone_only:
+        head = (
+            f"> **Mesure H7, {models}, {runtime.get('device', '?')}, phase ton seule, "
+            f"{runtime.get('energy_repeats', 1)} tour(s) de mesure.** Pas de verdict : "
+            "seuils non pré-enregistrés. Expression d'humeur, pas ressenti."
+        )
+    else:
+        short = ", ".join(reductions(protocol)) or "protocole complet"
+        head = (
+            f"> **Mesure courte, {models}, {runtime.get('device', '?')}, n réduit.** "
+            f"Réductions de protocole : {short}. Ordre de grandeur seulement, "
+            "pas un verdict. Expression d'humeur, pas ressenti."
+        )
+    md = "\n".join(
+        [
+            "# Rapport de frugalité (H7)",
+            "",
+            head,
+            "",
+            *([lecture, ""] if lecture else []),
+            "## H7 : coût du steering face au prompt joyeux",
+            "",
+            h7,
+            "",
+        ]
+    )
+    Path(report).parent.mkdir(parents=True, exist_ok=True)
+    Path(report).write_text(md, encoding="utf-8", newline="\n")
+    log(f"rapport écrit : {report}")
 
 
 def build_reports(
@@ -1126,28 +1451,7 @@ def build_reports(
         Path(report).write_text(md, encoding="utf-8", newline="\n")
         log(f"rapport écrit : {report} (verdict {j.verdict.label})")
     if h7 is not None and not core:
-        report = Path(frugality_report or report)
-        lecture = preserved_lecture(report)
-        short = ", ".join(reductions(protocol)) or "protocole complet"
-        models = ", ".join(s.model_id for s in specs)
-        md = "\n".join(
-            [
-                "# Rapport de frugalité (H7)",
-                "",
-                f"> **Mesure courte, {models}, {runtime.get('device', '?')}, n réduit.** "
-                f"Réductions de protocole : {short}. Ordre de grandeur seulement, "
-                "pas un verdict. Expression d'humeur, pas ressenti.",
-                "",
-                *([lecture, ""] if lecture else []),
-                "## H7 : coût du steering face au prompt joyeux",
-                "",
-                h7,
-                "",
-            ]
-        )
-        Path(report).parent.mkdir(parents=True, exist_ok=True)
-        Path(report).write_text(md, encoding="utf-8", newline="\n")
-        log(f"rapport écrit : {report}")
+        write_frugality_report(Path(frugality_report or report), h7, specs, protocol, runtime, log)
     if secondary:
         parts = [
             "# Rapport des modèles secondaires",
@@ -1210,6 +1514,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--energy", action="store_true", help="H7 : énergie et CO2 (extra frugal)")
     p.add_argument("--energy-country", default=None, help="code ISO du pays (défaut du module)")
     p.add_argument(
+        "--energy-repeats",
+        type=int,
+        default=1,
+        help="K tours de mesure d'énergie, ordre des bras alterné (demande --energy)",
+    )
+    p.add_argument(
+        "--tone-only",
+        action="store_true",
+        help="phase ton seule, cœur compris : mesure H7, rapport de frugalité, sans verdict",
+    )
+    p.add_argument(
         "--short-run",
         action="store_true",
         help="lève les planchers (mesure courte, modèles secondaires seuls, sans verdict)",
@@ -1231,7 +1546,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help=f"défaut {DEFAULT_SECONDARY_REPORT}, {{out}}/secondaires.md avec --short-run",
     )
     args = p.parse_args(argv)
-    floors = args.tone_tokens < 64 or args.n_tone < 50 or args.n_mcq < 100
+    floors = args.tone_tokens < 64 or args.n_tone < 50 or (args.n_mcq < 100 and not args.tone_only)
     if floors and not args.short_run:
         p.error("planchers : --tone-tokens >= 64, --n-tone >= 50, --n-mcq >= 100")
     keys = [k.strip() for k in args.models.split(",") if k.strip()]
@@ -1239,6 +1554,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         p.error("--short-run : modèles secondaires seuls (pas de verdict sur protocole réduit)")
     if args.energy_country and not args.energy:
         p.error("--energy-country demande --energy")
+    if args.energy_repeats < 1:
+        p.error("--energy-repeats doit être >= 1")
+    if args.energy_repeats > 1 and not args.energy:
+        p.error("--energy-repeats demande --energy")
+    if args.tone_only and not args.energy:
+        p.error("--tone-only demande --energy (rien d'autre à mesurer)")
     if args.max_judge_cost is not None and not 0 < args.max_judge_cost <= 1.0:
         p.error("--max-judge-cost doit être dans ]0, 1] $")
     return args
@@ -1280,10 +1601,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         tone_tokens=args.tone_tokens,
         n_mcq=args.n_mcq,
         secondary_phases=tuple(x for x in args.secondary_phases.split(",") if x),
+        tone_only=args.tone_only,
     )
     from mood_steering.eval.datasets import load_global_mmlu_lite
 
-    mcq = load_global_mmlu_lite(protocol.n_mcq, protocol.mcq_seed)
+    mcq = [] if protocol.tone_only else load_global_mmlu_lite(protocol.n_mcq, protocol.mcq_seed)
     vectors = {}
     for spec in specs:
         vp = vec_path(spec)
@@ -1291,7 +1613,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise FileNotFoundError(f"vecteur absent : {vp} (--regenerate-vectors)")
         mtime = time.strftime("%Y-%m-%d %H:%M", time.localtime(vp.stat().st_mtime))
         vectors[spec.key] = {"sha256": sha256(vp), "mtime": mtime}
-    manifest = build_manifest(specs, protocol, mcq, vectors, short_run=args.short_run)
+    manifest = build_manifest(
+        specs, protocol, mcq, vectors, short_run=args.short_run, energy_repeats=args.energy_repeats
+    )
     check_manifest(args.out, manifest, args.resume)
 
     import llama_cpp
@@ -1313,9 +1637,19 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         country = args.energy_country or DEFAULT_COUNTRY_ISO
         runtime.update(energy=True, energy_country=country)
+        if args.energy_repeats > 1:  # clé absente à K = 1 : campagnes existantes inchangées
+            runtime["energy_repeats"] = args.energy_repeats
+        from mood_steering.eval.frugality import system_load
+
+        runtime["load"] = system_load()
         tracker = CodeCarbonTracker(country)
     pending = not all(
-        p.exists() for spec in specs for _, _, p in model_units(spec, protocol, args.out)
+        p.exists()
+        for spec in specs
+        for p in (
+            *(q for _, _, q in model_units(spec, protocol, args.out)),
+            *(q for _, _, q in repeat_units(spec, protocol, args.out, args.energy_repeats)),
+        )
     )
     check_runtime(args.out, runtime, pending)
 
@@ -1341,6 +1675,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         vector_loader=vector_loader,
         deadline=deadline,
         energy_tracker=tracker,
+        energy_repeats=args.energy_repeats,
     )
     with (args.out / "runs.jsonl").open("a", encoding="utf-8", newline="\n") as fh:
         fh.write(
@@ -1360,6 +1695,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("campagne incomplète : relancer avec --resume")
         return EXIT_INCOMPLETE
     if args.no_report:
+        return 0
+    if protocol.tone_only:  # rien à noter : seul le rapport de frugalité
+        h7 = h7_section(args.out, specs, protocol)
+        if h7 is not None:
+            write_frugality_report(
+                args.report or DEFAULT_FRUGALITY_REPORT, h7, specs, protocol, runtime
+            )
         return 0
     from mood_steering.eval.judge import DEFAULT_MAX_COST_USD, DEFAULT_SAMPLE_SIZE, make_client
     from mood_steering.eval.tone import ToneScorer

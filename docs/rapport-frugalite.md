@@ -11,6 +11,21 @@
 Une conclusion demanderait une mesure sur une machine au repos, avec plusieurs lectures par bras et un ordre des bras alterné.
 <!-- /lecture -->
 
+## Méthode de la mesure A4 (prévue, non encore lancée)
+
+La mesure ci-dessous n'a qu'une lecture par bras, sur CPU partagé. L'action A4 de la rétro de l'epic 5 la reprend sur le modèle cœur (4B), en GPU, machine au repos, avec K lectures par bras et l'ordre des bras alterné :
+
+```
+uv run python scripts/run_bench.py --models 4b --tone-only --energy --energy-repeats 5   --n-gpu-layers -1 --cuda-dll-dir models/cuda-runtime   --out data/runs/energie-a4 --report data/runs/energie-a4/frugalite.md --no-judge
+```
+
+- `--tone-only` : phase ton seule pour tous les modèles, cœur compris (`--short-run` refuse le cœur) ; ni QCM, ni juge, ni classifieur, et le rapport de frugalité est écrit seul (`--report` évite d'écraser ce fichier-ci). Reprise : même commande avec `--resume` (K, règle d'ordre et device sont vérifiés).
+- Tour 0 = génération notée (mêmes sorties qu'une mesure à K = 1) ; les tours 1 à K-1 régénèrent les mêmes 100 prompts de ton sans notation (`{modèle}/tone_r{r}/{bras}.jsonl`) et ne servent qu'à l'énergie et à la latence. Une lecture CodeCarbon par bras et par tour, dans `energy_units.json` (clé `tone#r{r}` pour r > 0).
+- Ordre des bras alterné : tour pair dans l'ordre des bras (neutre, prompt joyeux, steering), tour impair dans l'ordre inverse. La règle et K sont figés au manifeste ; le relevé de charge au lancement (utilisation GPU par `nvidia-smi`, charge CPU) est dans `runs.jsonl`.
+- Rapport : par bras, énergie et CO2 par génération (moyenne, IC95 bootstrap sur les K tours) et ratio steering / `prompt_joyful` apparié par tour. Pas de verdict : les seuils de H7 ne sont pas pré-enregistrés (action A6).
+- Durée estimée : 8 bras x 5 tours = 40 passes de 100 générations de 128 jetons au plus. Sur la seule latence connue (0,8B, CPU : 1,3 s par génération de 64 jetons, soit une cinquantaine de jetons par seconde), un 4B en GPU à 40-60 jetons par seconde donne 3 à 5 min par passe, soit environ 2 à 3,5 h. Le premier tour affiche la durée réelle de chaque bras ; `--n-tone 50` divise la durée par deux (plancher du protocole).
+- Prérequis : `uv sync --extra frugal`, GPU sans autre charge (fermer toute autre mesure), vecteur du 4B dans `data/moods`.
+
 ## H7 : coût du steering face au prompt joyeux
 
 #### Qwen3.5-0.8B-Q4_K_M
