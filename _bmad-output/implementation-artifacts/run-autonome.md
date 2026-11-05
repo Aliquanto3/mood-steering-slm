@@ -247,3 +247,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:21 · 6.2 · second-avis · 2 high (<|im_end|> absent des fins, réponse tronquée comptée juste), 2 medium (reprise, transformers), 4 low · —
 - 2026-11-05 02:21 · 6.2 · décision · extra ablation en transformers>=5.22.1, déclaré incompatible avec eval (uv conflicts), job CI extras scindé · —
 - 2026-11-05 02:21 · 6.2 · review · passe 1 lancée · —
+- 2026-11-05 02:27 · 6.2 · review · passe 1 : 2 high, 2 medium, 4 low corrigés ; fumée réelle trois bras (37 s) · f5505be
+- 2026-11-05 02:27 · 6.2 · PR · #17 ouverte (partie code ; la mesure suivra 3.5) · f5505be
+- 2026-11-05 02:27 · 6.2 · review · passe 2 lancée (Sonnet) · —
