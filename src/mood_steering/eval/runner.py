@@ -38,7 +38,7 @@ def item_seed(seed: int, index: int) -> int:
     return seed + index
 
 
-def _system_for(arm: Arm, steerer: Steerer, neutral_instruction: bool) -> tuple[str | None, str]:
+def system_for(arm: Arm, steerer: Steerer, neutral_instruction: bool) -> tuple[str | None, str]:
     """(``system`` passé au Steerer, ``system`` effectif enregistré)."""
     extra = NEUTRAL_INSTRUCTION if neutral_instruction else None
     if arm.kind == KIND_PROMPT:
@@ -49,6 +49,9 @@ def _system_for(arm: Arm, steerer: Steerer, neutral_instruction: bool) -> tuple[
         base = JOYFUL_SYSTEM_PROMPT if arm.dose > 0 else SAD_SYSTEM_PROMPT
         return extra, compose_system(base, extra)
     return extra, extra or ""
+
+
+_system_for = system_for  # ancien nom privé
 
 
 def run_arm(
@@ -63,7 +66,7 @@ def run_arm(
     max_tokens: int = 128,
     neutral_instruction: bool = False,
 ) -> Path:
-    system, recorded = _system_for(arm, steerer, neutral_instruction)
+    system, recorded = system_for(arm, steerer, neutral_instruction)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{arm.name}.jsonl"
     part = out_dir / f"{arm.name}.jsonl.part"
