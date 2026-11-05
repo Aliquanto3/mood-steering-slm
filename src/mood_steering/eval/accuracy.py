@@ -64,12 +64,21 @@ _EXPLICIT = re.compile(
     r"[\s:=\-]*(?:(?i:est|serait|is|sera)[\s:=\-]*)?"
     r"(?:(?i:la\s+lettre|l'option|le\s+choix|option|lettre)\s*)?"
     r"\(?([A-D])(?![A-Za-zÀ-ÿ0-9])"
+    # « option A ou B » : alternative, pas une réponse.
+    r"(?!\)?\s*(?i:ou|or|et|and|/)\s*\(?[A-D](?![A-Za-zÀ-ÿ0-9]))"
 )
 _PAREN_LOWER = re.compile(r"^\s*\(([a-d])\)\s*[.!]?\s*$")
 _ALONE = re.compile(r"^\s*\(?([A-Da-d])\)?\s*[.!:)]*\s*$")
-_LEADING = re.compile(r"^\(?([A-D])(?:[\s.):,\]]|$)")
-_LEADING_OR = re.compile(r"^\(?[A-D]\)?\s*(?:ou|or|/|et)\s*\(?[A-D]\b", re.IGNORECASE)
-_STANDALONE = re.compile(r"(?<![A-Za-zÀ-ÿ0-9])\(?([A-D])\)?(?![A-Za-zÀ-ÿ0-9])")
+# Lettre en tête suivie d'un séparateur ; pas d'un mot (« A partir de… », « A mon avis »).
+_LEADING = re.compile(r"^\(?([A-D])(?:[.):,\]]|\s*$|\s+(?![a-zà-ÿ]))")
+# « A ou B », « (B) et (C) » : alternative, ambiguë.
+_ALTERNATIVE = re.compile(
+    r"(?<![A-Za-zÀ-ÿ0-9])\(?[A-D]\)?\s*(?i:ou|or|et|and|/)\s*\(?[A-D](?![A-Za-zÀ-ÿ0-9])"
+)
+# Lettre isolée ; « A » suivi d'un mot en minuscule est la préposition « à » sans accent.
+_STANDALONE = re.compile(
+    r"(?<![A-Za-zÀ-ÿ0-9])\(?(?:(A)(?!\s+[a-zà-ÿ])|([B-D]))\)?(?![A-Za-zÀ-ÿ0-9])"
+)
 _SHORT = 40
 
 
@@ -80,11 +89,18 @@ def extract_letter(output: str) -> str | None:
     « (b) ») ; formules explicites (« Réponse : B ») ; sortie courte à une seule lettre
     majuscule candidate ; lettre en tête (« B. Paris »). Plusieurs lettres distinctes
     candidates au même niveau, ou « A ou B » en tête : ambigu, ``None``. Un bloc
-    ``<think>`` jamais refermé (raisonnement tronqué) donne ``None``.
+    ``<think>`` jamais refermé (raisonnement tronqué) donne ``None`` ; une ``</think>``
+    orpheline (``<think>`` pré-ouvert par le gabarit) : seul le texte qui suit compte.
+    Une majuscule suivie d'un mot (« A partir de… ») ou une alternative (« option A ou
+    B ») n'est pas une réponse.
     """
     if not output:
         return None
     text = _THINK_BLOCK.sub(" ", output)
+    # Gabarit qui pré-ouvre ``<think>`` (Qwen3.5) : seule la fin ``</think>`` est émise.
+    closing = text.lower().rfind("</think>")
+    if closing >= 0:
+        text = text[closing + len("</think>") :]
     if re.search(r"<think>", text, re.IGNORECASE):
         return None
     text = _MARKDOWN.sub("", text).strip()
@@ -98,11 +114,11 @@ def extract_letter(output: str) -> str | None:
         return None
     if explicit:
         return next(iter(explicit))
-    if len(text) <= _SHORT:
-        found = {m.group(1) for m in _STANDALONE.finditer(text)}
-        return next(iter(found)) if len(found) == 1 else None
-    if _LEADING_OR.match(text):
+    if _ALTERNATIVE.search(text):
         return None
+    if len(text) <= _SHORT:
+        found = {m.group(1) or m.group(2) for m in _STANDALONE.finditer(text)}
+        return next(iter(found)) if len(found) == 1 else None
     lead = _LEADING.match(text)
     return lead.group(1) if lead else None
 

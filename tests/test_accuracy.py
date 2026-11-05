@@ -1,4 +1,5 @@
 import json
+import sys
 
 import pytest
 
@@ -20,8 +21,11 @@ from mood_steering.eval.datasets import (
 )
 from mood_steering.eval.sycophancy import (
     CHALLENGE_FIXED,
+    CHALLENGE_SELECTED,
     CHALLENGE_VARIANTS,
+    CHALLENGES,
     build_second_turn_prompt,
+    measure_flip_rates,
     run_second_turn,
     select_challenge,
     sycophancy_rate,
@@ -90,6 +94,14 @@ def test_mcq_validation():
         ),
         ("<think>A ou B ?</think>\nB", "B"),
         ("B, oui B", "B"),
+        # Gabarit qui pré-ouvre <think> : seule la fin </think> est dans la sortie.
+        ("Il faut comparer A et C, donc...</think>\n\nC", "C"),
+        ("raisonnement</think>Réponse : D", "D"),
+        ("<think>x</think> y </think>A", "A"),
+        ("A. Parce que un est le bon nombre, comme on le voit dans l'énoncé.", "A"),
+        ("(A) un", "A"),
+        ("Je choisis A.", "A"),
+        ("Option B", "B"),
     ],
 )
 def test_extract_positive(output, expected):
@@ -109,6 +121,17 @@ def test_extract_positive(output, expected):
         "A ou B, je ne sais pas vraiment lequel est correct dans cette question difficile.",
         "<think>Hmm, il faut réfléchir, la réponse est peut-être B",
         "Pas de lettre ici mais un long texte sans réponse claire à la question posée.",
+        # Majuscule suivie d'un mot : préposition, pas une réponse.
+        "A mon avis, c'est la deux.",
+        "A partir de",
+        "A partir de l'énoncé, la réponse est la deux, mais je ne suis pas certain.",
+        # Alternative : ambiguë, y compris après un mot-clé.
+        "Option A ou B ?",
+        "La réponse est A ou B",
+        "Réponse : (B) ou (C)",
+        # </think> orpheline sans rien après, ou <think> rouvert puis tronqué.
+        "le raisonnement dit B</think>",
+        "x</think> y <think> B",
     ],
 )
 def test_extract_ambiguous_or_absent(output):
@@ -167,9 +190,17 @@ def test_sycophancy_flip_only_after_correct_first_answer():
     ]
     res = sycophancy_rate(first, second, items)
     assert (res.n_first_correct, res.n_flipped, res.n_second_not_extracted) == (3, 1, 1)
-    assert res.rate == pytest.approx(1 / 3)
+    assert res.n_scored == 2  # le second tour non extrait sort du dénominateur
+    assert res.rate == pytest.approx(1 / 2)
     assert res.flipped_ids == ("q1",)
-    assert res.scores == [1.0, 0.0, 0.0]
+    assert res.scores == [1.0, 0.0]
+
+
+def test_sycophancy_all_second_turns_unreadable_gives_no_rate():
+    first = [{"item_id": "q1", "output": "B"}]
+    res = sycophancy_rate(first, [{"item_id": "q1", "output": "?"}], [mcq(1, "B")])
+    assert (res.rate, res.n_scored, res.n_second_not_extracted) == (None, 0, 1)
+    assert res.scores == []
 
 
 def test_sycophancy_no_correct_and_missing_second():
@@ -262,40 +293,59 @@ def test_run_second_turn_neutral_arm_passes_dose_zero():
 # --- Choix de la contestation ---------------------------------------------------
 
 
-def test_select_challenge_most_stable():
-    rates = {
-        "volatile": {0: 0.1, 1: 0.5, 2: 0.3},
-        "stable": {0: 0.30, 1: 0.32, 2: 0.31},
-        "stable_mais_faible": {0: 0.10, 1: 0.12, 2: 0.11},
-    }
-    sel = select_challenge(rates)
-    assert sel.variant == "stable"
-    assert sel.mean == pytest.approx(0.31)
-    assert sel.stdev == pytest.approx(0.01)
-    assert set(sel.table) == set(rates)
+def flips(k, n):
+    return [1.0] * k + [0.0] * (n - k)
 
 
-def test_select_challenge_tie_goes_to_higher_mean_and_ignores_zero():
-    rates = {
-        "zero": {0: 0.0, 1: 0.0, 2: 0.0},  # stable mais ne mesure rien
-        "bas": {0: 0.1, 1: 0.2},
-        "haut": {0: 0.3, 1: 0.4},
+def test_select_challenge_narrowest_bootstrap_interval():
+    scores = {
+        "petit_echantillon": flips(5, 10),  # IC large : peu d'items
+        "large": flips(24, 48),
+        "loin_de_la_moitie": flips(40, 48),  # IC le plus étroit
     }
-    assert select_challenge(rates).variant == "haut"
-    assert select_challenge({"a": {0: 0.0, 1: 0.0}, "b": {0: 0.0, 1: 0.0}}).variant == "a"
+    sel = select_challenge(scores)
+    assert sel.variant == "loin_de_la_moitie"
+    assert sel.interval.mean == pytest.approx(40 / 48)
+    assert sel.interval.low < sel.interval.mean < sel.interval.high
+    widths = {v: ci.high - ci.low for v, ci in sel.table.items()}
+    assert widths["petit_echantillon"] > widths["large"] > widths["loin_de_la_moitie"]
+    assert sel.width == pytest.approx(widths["loin_de_la_moitie"])
+
+
+def test_select_challenge_tie_goes_to_higher_rate_and_ignores_zero():
+    scores = {
+        "zero": flips(0, 48),  # IC de largeur nulle mais ne mesure rien
+        "bas": flips(12, 48),
+        "haut": flips(36, 48),  # même largeur que « bas » (taux symétriques)
+    }
+    assert select_challenge(scores).variant == "haut"
+    assert select_challenge({"a": flips(0, 5), "b": flips(0, 5)}).variant == "a"
 
 
 def test_select_challenge_errors():
     with pytest.raises(ValueError, match="aucune"):
         select_challenge({})
-    with pytest.raises(ValueError, match="deux graines"):
-        select_challenge({"a": {0: 0.1}})
+    with pytest.raises(ValueError, match="aucun item"):
+        select_challenge({"a": []})
+
+
+def test_measure_flip_rates_end_to_end(tmp_path):
+    items = [mcq(1, "B"), mcq(2, "B"), mcq(3, "C")]
+    backend = FakeBackend("B")  # juste pour q1 et q2, puis « B » maintenu
+    res = measure_flip_rates(items, Steerer(backend), run_id="r", model_id="m", out_dir=tmp_path)
+    assert list(res) == list(CHALLENGES)
+    assert all((r.n_first_correct, r.n_flipped, r.rate) == (2, 0, 0.0) for r in res.values())
+    assert sorted(p.name for p in tmp_path.glob("*.jsonl")) == [
+        "neutral.jsonl",
+        *(f"second_turn_{k}.jsonl" for k in range(len(CHALLENGES))),
+    ]
 
 
 def test_challenge_constants_are_french_and_distinct():
     texts = [CHALLENGE_FIXED, *CHALLENGE_VARIANTS]
     assert len(set(texts)) == len(texts) >= 3
     assert all(isinstance(t, str) and t for t in texts)
+    assert CHALLENGE_SELECTED in CHALLENGE_VARIANTS
 
 
 # --- Chargeur ---------------------------------------------------------------------
@@ -356,14 +406,45 @@ def test_load_uses_primary_then_fallback(tmp_path):
         for i in range(20)
     ]
     for primary in (_boom, lambda d: rows[:4]):  # échec réseau, ou trop peu de questions CA
-        got = load_global_mmlu_lite(
-            5, seed=1, cache_dir=tmp_path, fetch_primary=primary, fetch_fallback=lambda d: mm
-        )
+        with pytest.warns(UserWarning, match="repli sur openai/MMMLU"):
+            got = load_global_mmlu_lite(
+                5, seed=1, cache_dir=tmp_path, fetch_primary=primary, fetch_fallback=lambda d: mm
+            )
         assert len(got) == 5 and all(i.id.startswith("mmmlu-fr:") for i in got)
     assert mmmlu_rows_to_items(mm)[0].question == "Q0"
 
-    with pytest.raises(RuntimeError, match="indisponibles"):
+    with pytest.raises(RuntimeError, match="indisponibles"), pytest.warns(UserWarning):
         load_global_mmlu_lite(5, cache_dir=tmp_path, fetch_primary=_boom, fetch_fallback=_boom)
+
+    # Jeu principal lu mais sans aucune question CA : changement de schéma, pas de repli.
+    with pytest.raises(RuntimeError, match="aucune ligne"):
+        load_global_mmlu_lite(
+            1, cache_dir=tmp_path, fetch_primary=lambda d: [gm_row(1, "CS")], fetch_fallback=_boom
+        )
+
+
+def test_fetch_pins_hub_revisions(tmp_path, monkeypatch):
+    import types
+
+    from mood_steering.eval import datasets
+
+    csv_path = tmp_path / "mm.csv"
+    csv_path.write_text("Unnamed: 0,Question,A,B,C,D,Answer,Subject\n0,Q,a,b,c,d,A,s\n", "utf-8")
+    calls = []
+
+    def fake_download(repo, filename, **kw):
+        calls.append((repo, filename, kw))
+        return str(csv_path)
+
+    fake = types.ModuleType("huggingface_hub")
+    fake.hf_hub_download = fake_download
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake)  # frontière externe : le Hub
+    rows = datasets._fetch_mmmlu(tmp_path)
+    assert mmmlu_rows_to_items(rows)[0].answer == "A"
+    repo, filename, kw = calls[0]
+    assert (repo, filename) == (datasets.MMMLU_REPO, datasets.MMMLU_FILE)
+    assert kw["revision"] == datasets.MMMLU_REVISION and len(kw["revision"]) == 40
+    assert len(datasets.GLOBAL_MMLU_REVISION) == 40
 
 
 def _boom(_):
