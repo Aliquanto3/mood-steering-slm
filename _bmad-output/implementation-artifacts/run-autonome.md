@@ -261,3 +261,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:40 · 5.3 · review · passe 1 (Sonnet) : 1 high trouvé à l'essai réel (output_dir), 1 medium, 3 low corrigés ; essai CodeCarbon réel OK ; pas de passe 2 (validé en réel) · c4da255
 - 2026-11-05 02:40 · 5.3 · CI · verte (6 jobs) · c4da255
 - 2026-11-05 02:40 · 5.3 · fusion · #18 fusionnée (partie code), MERGED vérifié ; branchement run_bench après 3.5 · 1fe6b7b
+- 2026-11-05 04:36 · 3.5 · dev · fini, campagne complète 3 modèles, verdict « non » (H1 non tenue, H4 oui), juge 56/200 invalides (max_tokens 64), 339 tests verts · a621925
