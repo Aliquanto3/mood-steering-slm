@@ -179,3 +179,10 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:27 · 3.4 · review · passe 1 : 3 medium et 4 low corrigés ; pôle négatif ic_non_overlap (bootstrap apparié 6-8 % de faux positifs à 30 items) ; bootstrap apparié pour H4 · 06b6579
 - 2026-11-05 01:27 · 3.4 · PR · #11 ouverte · 06b6579
 - 2026-11-05 01:27 · 3.4 · review · passe 2 lancée · —
+- 2026-11-05 01:32 · 3.4 · review · passe 2 : 1 medium corrigé (« oui » sans complaisance mesurée), vérifié par l'orchestrateur, pas de passe 3 · 90f1669
+- 2026-11-05 01:32 · 3.4 · CI · verte sur les trois OS · 90f1669
+- 2026-11-05 01:32 · 3.4 · fusion · #11 fusionnée, MERGED vérifié · dbdbb1e
+- 2026-11-05 01:32 · 1.4 · second-avis · 1 high (pôle tristesse 4B en partie fait de refus d'assistant), 8 medium, 3 low · —
+- 2026-11-05 01:32 · 1.4 · décision · re-noter les sorties existantes avec le classifieur de 3.2 + détecteur de refus, plages recalculées par code, VRAM mesurée · —
+- 2026-11-05 01:32 · 1.4 · review · passe 1 lancée · —
+- 2026-11-05 01:32 · 4.1 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; ajoute Steerer.stream) · —
