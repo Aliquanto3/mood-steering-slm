@@ -231,3 +231,7 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:09 · 2.3 · review · passe 1 : 2 high, 3 medium, 4 low corrigés + tampon cvec décalé corrigé (vérifié : texte identique au tampon complet du pic 1.4) ; set_cvec par pointeur numpy · 345927e
 - 2026-11-05 02:09 · 2.3 · PR · #15 ouverte · 345927e
 - 2026-11-05 02:09 · 2.3 · review · passe 2 lancée · —
+- 2026-11-05 02:11 · 2.3 · review · passe 2 : 0 Important (pointeur copié par llama.cpp, pulse borné) · 345927e
+- 2026-11-05 02:11 · 2.3 · CI · verte sur les trois OS · 345927e
+- 2026-11-05 02:11 · 2.3 · fusion · #15 fusionnée, MERGED vérifié ; Epic 2 terminé · d3b58f5
+- 2026-11-05 02:11 · 3.5 · dev · lancé (dev-story Opus, pivot, worktree ; campagne réelle sur la tour, juge Opus 5.5 réel ≤ 1 $) · —

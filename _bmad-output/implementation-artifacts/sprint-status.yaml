@@ -42,10 +42,10 @@ development_status:
   1-4-pic-de-calibration-choisir-les-modèles: done
   epic-1-retrospective: optional
 
-  epic-2: in-progress
+  epic-2: done
   2-1-module-calibration-et-cache-des-vecteurs: done
   2-2-module-steering-dose-et-repli-sur-le-prompt: done
-  2-3-module-schedule-dose-par-token: in-progress
+  2-3-module-schedule-dose-par-token: done
   epic-2-retrospective: optional
 
   epic-3: in-progress
@@ -53,7 +53,7 @@ development_status:
   3-2-mesure-du-ton-classifieur-et-juge-en-aveugle: done
   3-3-exactitude-et-complaisance: done
   3-4-rapport-et-verdict-h1-h3-h4: done
-  3-5-campagne-de-mesure-sur-la-tour: backlog
+  3-5-campagne-de-mesure-sur-la-tour: in-progress
   epic-3-retrospective: optional
 
   epic-4: in-progress
