@@ -352,3 +352,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 08:34 · run · rétro · epics 5 (accepted-with-open-items) et 6 (rejected, décision d'Anaël), 9 actions · —
 - 2026-11-05 20:51 · run · décision · A9 accordée par Anaël : PR chore/etat-run → main ; A1 marquée faite (PR #28) · —
 - 2026-11-05 20:51 · A2 · pilote · lancé (origine seule, n=10, 2048 tokens, GPU RTX 3050) · —
+- 2026-11-05 20:54 · run · fusion · #29 état du run vers main, MERGED vérifié ; branches de stories fusionnées supprimées (accord d'Anaël) · b20a656
+- 2026-11-05 20:54 · A5 · dev · lancé (Sonnet, worktree), cadrage story-a5-mise-en-commun.md · —
