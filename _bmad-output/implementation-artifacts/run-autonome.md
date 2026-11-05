@@ -258,3 +258,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:32 · 5.3 · second-avis · lancé · —
 - 2026-11-05 02:36 · 5.3 · second-avis · 2 medium (non branché dans run_bench.py : voulu ; verrou CodeCarbon), 3 low ; référence prompt_joyful et API codecarbon 3.3.2 vérifiées · —
 - 2026-11-05 02:36 · 5.3 · review · passe 1 lancée (Sonnet) · —
+- 2026-11-05 02:40 · 5.3 · review · passe 1 (Sonnet) : 1 high trouvé à l'essai réel (output_dir), 1 medium, 3 low corrigés ; essai CodeCarbon réel OK ; pas de passe 2 (validé en réel) · c4da255
+- 2026-11-05 02:40 · 5.3 · CI · verte (6 jobs) · c4da255
+- 2026-11-05 02:40 · 5.3 · fusion · #18 fusionnée (partie code), MERGED vérifié ; branchement run_bench après 3.5 · 1fe6b7b
