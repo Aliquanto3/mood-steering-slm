@@ -17,7 +17,8 @@ sur la phase ``tone`` seulement (mêmes items, mêmes jetons pour tous les bras)
 section H7 au rapport (``docs/rapport-frugalite.md`` sans modèle cœur). ``--short-run`` lève les
 planchers pour une mesure courte de modèles secondaires seuls, notée au manifeste. Lectures
 par unité dans ``{out}/energy_units.json``, cumulées d'une reprise à l'autre ; ``runs.jsonl``
-note ``energy``. Une reprise avec une autre valeur d'``--energy`` est refusée. Estimation de la machine entière : la mesurer au repos.
+note ``energy``. Une reprise avec une autre valeur d'``--energy`` est refusée.
+Estimation de la machine entière : la mesurer au repos.
 
 Mesures : ton (classifieur, polarité de contrôle, juge en aveugle sur un sous-échantillon),
 ton sous consigne neutre (H4), exactitude sur QCM, complaisance (second tour), refus d'assistant
