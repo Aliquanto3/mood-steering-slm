@@ -238,3 +238,7 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:12 · 6.1 · review · passe 1 : 4 medium et 1 low corrigés, job CI extras ajouté, directions exportées dans data/directions/ (couches 15 et 19) · f182159
 - 2026-11-05 02:12 · 6.1 · PR · #16 ouverte (main fusionné) · d2b90b7
 - 2026-11-05 02:12 · 6.1 · review · passe 2 lancée (Sonnet, story bonus mécanique) · —
+- 2026-11-05 02:14 · 6.1 · review · passe 2 : 0 constat ; job extras 15 s · d2b90b7
+- 2026-11-05 02:14 · 6.1 · CI · verte (4 jobs dont extras) · d2b90b7
+- 2026-11-05 02:14 · 6.1 · fusion · #16 fusionnée, MERGED vérifié · 6aa6090
+- 2026-11-05 02:14 · 6.2 · dev · lancé (code et fumée seulement ; mesure complète après la campagne 3.5 pour ne pas lui prendre la tour) · —

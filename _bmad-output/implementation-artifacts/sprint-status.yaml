@@ -70,6 +70,6 @@ development_status:
   epic-5-retrospective: optional
 
   epic-6: in-progress
-  6-1-ablation-de-direction-à-l-inférence-pile-c: in-progress
-  6-2-mesure-des-trois-bras-anti-boucle: backlog
+  6-1-ablation-de-direction-à-l-inférence-pile-c: done
+  6-2-mesure-des-trois-bras-anti-boucle: in-progress
   epic-6-retrospective: optional
