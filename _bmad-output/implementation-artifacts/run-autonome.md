@@ -200,3 +200,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:45 · 4.2 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD) · —
 - 2026-11-05 01:47 · 4.2 · dev · fini, 3 tests (265 au total), HTML/CSS/JS natifs sans CDN ; JS non exécuté en navigateur · e207cf2
 - 2026-11-05 01:47 · 4.2 · second-avis · lancé · —
+- 2026-11-05 01:49 · 4.2 · second-avis · 0 high, 1 medium (seconde requête /stream après erreur), 5 low ; fermeture à done et textContent vérifiés · —
+- 2026-11-05 01:49 · 4.2 · décision · fetch en flux + AbortController au lieu d'EventSource · —
+- 2026-11-05 01:49 · 4.2 · review · passe 1 lancée · —
