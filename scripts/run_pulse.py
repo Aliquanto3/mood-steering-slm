@@ -47,7 +47,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import run_bench as rb  # noqa: E402  (utilitaires de la campagne 3.5, import seul)
 
-from mood_steering.eval.stats import Interval, bootstrap_ci  # noqa: E402
+from mood_steering.eval.resumable import clean_for_append, dump_row, read_rows  # noqa: E402
+from mood_steering.eval.stats import (  # noqa: E402
+    Interval,
+    bootstrap_ci,
+    excludes_zero,
+    paired_bootstrap_diff,
+)
 from mood_steering.schedule import DoseSchedule, constant, pulse  # noqa: E402
 from mood_steering.steering import Steerer  # noqa: E402
 
@@ -170,11 +176,6 @@ def arm_file(out: Path, arm: str) -> Path:
     return Path(out) / f"{arm}.jsonl"
 
 
-def load_rows(path: Path) -> list[dict[str, Any]]:
-    """Lignes complètes d'un fichier de bras ; une dernière ligne tronquée est perdue."""
-    return rb._read_part(path) if path.exists() else []
-
-
 def run_campaign(
     steerer: Steerer,
     items: Sequence[tuple[rb.Item, int]],
@@ -194,14 +195,8 @@ def run_campaign(
     out.mkdir(parents=True, exist_ok=True)
     done: dict[str, set[str]] = {}
     for arm in arms:
-        rows = load_rows(arm_file(out, arm))
         # réécriture atomique : retire une éventuelle ligne tronquée avant d'ajouter
-        path = arm_file(out, arm)
-        part = path.with_name(path.name + ".part")
-        with part.open("w", encoding="utf-8", newline="\n") as fh:
-            for row in rows:
-                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-        os.replace(part, path)
+        rows = clean_for_append(arm_file(out, arm))
         done[arm] = {r["item_id"] for r in rows}
     for item, seed in items:
         for arm in arms:
@@ -211,7 +206,7 @@ def run_campaign(
                 return False
             row = generate_row(steerer, arm, item, seed, max_tokens, device)
             with arm_file(out, arm).open("a", encoding="utf-8", newline="\n") as fh:
-                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+                fh.write(dump_row(row))
             done[arm].add(item.id)
     return True
 
@@ -291,24 +286,29 @@ def paired(
     Avec ``absolute_to`` (le bras neutre) : ``|a[ka] - n[ka]| - |b[kb] - n[kb]|`` (écart au
     neutre de ``a`` moins écart au neutre de ``b``), sur les prompts où les trois existent.
     """
-    diffs = []
+    xs: list[float] = []
+    ys: list[float] = []
     for item_id, ta in a.items():
         tb = b.get(item_id)
         if tb is None or ta[ka] is None or tb[kb] is None:
             continue
         if absolute_to is None:
-            diffs.append(ta[ka] - tb[kb])
+            xs.append(ta[ka])
+            ys.append(tb[kb])
             continue
         tn = absolute_to.get(item_id)
         if tn is None or tn[ka] is None or tn[kb] is None:
             continue
-        diffs.append(abs(ta[ka] - tn[ka]) - abs(tb[kb] - tn[kb]))
-    return ci(diffs, n_boot=n_boot, seed=seed)
+        xs.append(abs(ta[ka] - tn[ka]))
+        ys.append(abs(tb[kb] - tn[kb]))
+    if not xs:
+        return None
+    return paired_bootstrap_diff(xs, ys, n_boot=n_boot, seed=seed)
 
 
 def positive(iv: Interval | None) -> bool:
     """IC95 disjoint de 0, du côté positif."""
-    return iv is not None and iv.low > 0
+    return excludes_zero(iv, 1)
 
 
 def output_rates(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -328,9 +328,14 @@ def analyse(
     *,
     n_boot: int = 2000,
     seed: int = 0,
+    tones: Mapping[str, Mapping[str, list[float | None]]] | None = None,
 ) -> dict[str, Any]:
-    """Tableau ton x segment x bras, taux de sorties dégénérées et critères de H6."""
-    tones = score_rows(rows_by_arm, scorer)
+    """Tableau ton x segment x bras, taux de sorties dégénérées et critères de H6.
+
+    ``tones`` (tons déjà notés, ``summary.json``) dispense de ``scorer`` : mode rapport seul.
+    """
+    if tones is None:
+        tones = score_rows(rows_by_arm, scorer)
     kw = {"n_boot": n_boot, "seed": seed}
     cells = {arm: [cell(tones[arm], k, **kw) for k in range(N_SEGMENTS)] for arm in rows_by_arm}
     pl, co, ne = tones.get(ARM_PULSE), tones.get(ARM_CONSTANT), tones.get(ARM_NEUTRAL)
@@ -595,7 +600,7 @@ def items_for(cfg: Config) -> list[tuple[rb.Item, int]]:
 
 
 def read_all(out: Path) -> dict[str, list[dict[str, Any]]]:
-    return {arm: load_rows(arm_file(out, arm)) for arm in ARMS}
+    return {arm: read_rows(arm_file(out, arm)) for arm in ARMS}
 
 
 def is_complete(out: Path, cfg: Config, subset: int | None = None) -> bool:
@@ -639,11 +644,22 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     p.add_argument("--no-report", action="store_true", help="générer sans noter ni rédiger")
+    p.add_argument(
+        "--report-only",
+        action="store_true",
+        help="rapport depuis les sorties et les tons de summary.json, sans génération ni notation",
+    )
     return p.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.report_only:
+        runtime_file = args.out / "runtime.json"
+        runtime = json.loads(runtime_file.read_text(encoding="utf-8"))
+        runtime["git"] = rb.git_sha()
+        runtime.setdefault("first_device", runtime["device"])
+        return write_report(args, runtime)
     cfg = Config(n_prompts=args.n_prompts)
     items_for(cfg)  # valide n_prompts avant tout écrit
     spec = rb.MODELS[MODEL_KEY]
@@ -654,11 +670,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     check_manifest(args.out, manifest, args.resume)
     if args.cuda_dll_dir is not None:  # avant l'import de llama_cpp (roue CUDA)
         os.environ["PATH"] = str(args.cuda_dll_dir.resolve()) + os.pathsep + os.environ["PATH"]
-    runtime: dict[str, Any] = {"git": rb._git_sha(), "device": "inconnu", "llama_cpp": "inconnu"}
+    runtime: dict[str, Any] = {"git": rb.git_sha(), "device": "inconnu", "llama_cpp": "inconnu"}
     runtime_file = args.out / "runtime.json"
     if runtime_file.exists():
         runtime.update(json.loads(runtime_file.read_text(encoding="utf-8")))
-        runtime["git"] = rb._git_sha()  # commit du rapport (une reprise peut changer de commit)
+        runtime["git"] = rb.git_sha()  # commit du rapport (une reprise peut changer de commit)
     # device des sorties déjà écrites sans champ ``device`` : celui du premier lancement
     runtime.setdefault("first_device", runtime["device"])
     if not is_complete(args.out, cfg, args.subset):
@@ -700,17 +716,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             return EXIT_INCOMPLETE
     if args.no_report:
         return 0
-    from mood_steering.eval.tone import ToneScorer
+    return write_report(args, runtime)
 
+
+def write_report(args: argparse.Namespace, runtime: dict[str, Any]) -> int:
+    """Analyse et rédige le rapport (``--report-only`` : tons relus dans ``summary.json``)."""
     rows_by_arm = read_all(args.out)
     runtime["device"] = describe_devices(rows_by_arm, runtime["first_device"])
-    summary = analyse(rows_by_arm, ToneScorer.from_huggingface())
+    if args.report_only:
+        cached = json.loads((args.out / "summary.json").read_text(encoding="utf-8"))["tones"]
+        summary = analyse(rows_by_arm, None, tones=cached)
+    else:
+        from mood_steering.eval.tone import ToneScorer
+
+        summary = analyse(rows_by_arm, ToneScorer.from_huggingface())
     (args.out / "summary.json").write_text(
         json.dumps(summary, default=lambda o: o.__dict__, indent=1), encoding="utf-8"
     )
     lecture = rb.preserved_lecture(args.report)
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(render_report(summary, runtime, lecture), encoding="utf-8")
+    args.report.write_text(render_report(summary, runtime, lecture), encoding="utf-8", newline="\n")
     print(f"rapport : {args.report} ; lecture mécanique H6 : {summary['h6']['lecture']}")
     return 0
 

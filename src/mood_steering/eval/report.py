@@ -56,7 +56,7 @@ from pathlib import Path
 
 from mood_steering.eval.accuracy import AccuracyResult
 from mood_steering.eval.arms import KIND_NEUTRAL, KIND_PROMPT, KIND_STEERING, Arm
-from mood_steering.eval.stats import Interval, _percentile, bootstrap_ci
+from mood_steering.eval.stats import Interval, bootstrap_ci, paired_bootstrap_diff, percentile
 from mood_steering.eval.sycophancy import SycophancyResult
 
 MENTION_NOT_FEELING = "expression d'humeur, pas ressenti"
@@ -203,16 +203,7 @@ def bootstrap_diff(
     rng = random.Random(seed)
     diffs = sorted(_resampled_mean(a, rng) - _resampled_mean(b, rng) for _ in range(n_boot))
     mean = sum(a) / len(a) - sum(b) / len(b)
-    return Interval(mean, _percentile(diffs, 0.025), _percentile(diffs, 0.975), min(len(a), len(b)))
-
-
-def paired_bootstrap_diff(
-    a: Sequence[float], b: Sequence[float], *, n_boot: int = 2000, seed: int = 0
-) -> Interval:
-    """Moyenne des écarts par item a_i - b_i (séquences alignées) et IC95 percentile."""
-    if not a or len(a) != len(b):
-        raise ValueError("séquences appariées vides ou de longueurs différentes")
-    return bootstrap_ci([x - y for x, y in zip(a, b, strict=True)], n_boot=n_boot, seed=seed)
+    return Interval(mean, percentile(diffs, 0.025), percentile(diffs, 0.975), min(len(a), len(b)))
 
 
 def align_by_id(
@@ -569,7 +560,7 @@ def _h4_bootstrap(
         )
         diffs.append(dp - ds)
     diffs.sort()
-    return [_percentile(diffs, 0.025), _percentile(diffs, 0.975)], METHOD_INDEP
+    return [percentile(diffs, 0.025), percentile(diffs, 0.975)], METHOD_INDEP
 
 
 def judge_h4(

@@ -116,10 +116,10 @@ def test_boot_stat_is_deterministic_and_interval_brackets_point():
     assert a == b and len(a) == 50
     point = rs.stat_tone(1)(data, list(range(40)))
     assert point == pytest.approx(0.6)
-    iv = rs.interval(a, point)
+    iv = rs.interval_from_draws(a, point)
     assert iv.low <= point <= iv.high
     assert iv.n == 50
-    nan_iv = rs.interval([math.nan], 1.0)
+    nan_iv = rs.interval_from_draws([math.nan], 1.0)
     assert math.isnan(nan_iv.low) and nan_iv.n == 0
 
 
@@ -279,3 +279,32 @@ def test_real_scale_slope_divides_by_max_scale_and_sensitivity_to_threshold():
     assert doses[0.05] == doses[0.10] == [(0.5,), (0.5,)]
     assert doses[0.20] == [(0.5, 1.0), (0.5, 1.0)]
     assert "seuil 20 % : positif 0.5, 1 ; négatif 0.5, 1" in rs.model_section(ms)
+
+
+def test_shifted_arm_uses_paired_criterion_of_stats(monkeypatch):
+    from mood_steering.eval import stats
+
+    # petit écart constant sur des prompts très dispersés : IC séparés qui se recouvrent,
+    # mais IC95 de la différence appariée loin de 0
+    base = _wave(0.0, spread=2.0)
+    neutral = _arm("neutral", "neutral", 0.0, base)
+    up = _arm("up", "steering", 1.0, [x + 0.3 for x in base])
+    down = _arm("down", "steering", -1.0, [x - 0.3 for x in base])
+    kw = {"n_boot": 200, "seed": 0}
+    ci, ci0 = (stats.bootstrap_ci(list(a.tones), **kw) for a in (up, neutral))
+    assert ci.low <= ci0.high  # l'ancien critère (IC disjoints) ne voyait rien
+    assert rs.shifted_arm(up, neutral, **kw)
+    assert rs.shifted_arm(down, neutral, **kw)
+    assert rs.shifted_arm(up, neutral, **kw) == stats.paired_shift(
+        up.tones, neutral.tones, direction=1, **kw
+    )
+    # mauvais sens : pas utile ; l'appel passe bien par la fonction partagée
+    flipped = _arm("f", "steering", -1.0, up.tones)
+    assert not rs.shifted_arm(flipped, neutral, **kw)
+    seen = []
+    real = stats.paired_shift
+    monkeypatch.setattr(
+        rs, "paired_shift", lambda *a, **k: seen.append(k["direction"]) or real(*a, **k)
+    )
+    rs.shifted_arm(down, neutral, **kw)
+    assert seen == [-1]

@@ -30,6 +30,7 @@ from typing import Any
 
 from mood_steering.eval.accuracy import McqItem, extract_letter, mcq_to_item
 from mood_steering.eval.arms import KIND_NEUTRAL, Arm
+from mood_steering.eval.resumable import read_rows
 from mood_steering.eval.runner import item_seed, run_arm, system_for
 from mood_steering.eval.stats import Interval, bootstrap_ci
 from mood_steering.steering import Steerer
@@ -235,7 +236,10 @@ def flip_results(
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    """Lignes d'un JSONL terminé (coupe sur ``\n`` seul, voir ``resumable``)."""
+    if not Path(path).is_file():
+        raise FileNotFoundError(path)
+    return read_rows(path, strict=True)
 
 
 def measure_flip_rates(

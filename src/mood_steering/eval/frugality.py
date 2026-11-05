@@ -4,16 +4,8 @@ Le traqueur est injectable (protocole ``EnergyTracker``) ; l'implémentation ré
 ``CodeCarbonTracker`` importe ``codecarbon`` à la demande (extra ``frugal``).
 Les lectures par bras sont écrites dans ``energy.json`` du run, à côté des JSONL.
 
-Branchement prévu dans ``scripts/run_bench.py`` (option ``--energy``) ::
-
-    from mood_steering.eval.frugality import (
-        CodeCarbonTracker, frugality_section, frugality_summary)
-
-    tracker = CodeCarbonTracker() if args.energy else None
-    paths = run_bench(arms, items, steerer, run_id=..., model_id=..., energy_tracker=tracker)
-    ...
-    if args.energy:
-        extra_sections["H7"] = frugality_section(frugality_summary(run_dir))
+Branchement réel : ``scripts/run_bench.py --energy`` mesure chaque unité de la phase ton
+(``energy_units.json``) et écrit les lectures par bras avec ``write_energy``.
 """
 
 from __future__ import annotations

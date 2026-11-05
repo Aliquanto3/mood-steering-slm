@@ -509,6 +509,39 @@ def test_energy_not_published_for_unit_started_without_measure(tmp_path):
     assert len(units) == 7 and tracker.starts == 7
 
 
+class BoomBackend(FakeBackend):
+    def generate(self, prompt, system, max_tokens, seed):
+        raise RuntimeError("bras en échec")
+
+
+class BrokenTracker(FakeTracker):
+    def stop(self):
+        self.stops += 1
+        raise OSError("traqueur en échec")
+
+
+def test_stop_failure_does_not_mask_unit_exception(tmp_path):
+    spec = rb.MODELS["0.8b"]
+    protocol = rb.Protocol(n_tone=10, n_mcq=6, secondary_phases=("tone",))
+    logs = []
+    kw = {**_tone_kw(), "backend_factory": lambda s: BoomBackend(), "log": logs.append}
+    tracker = BrokenTracker()
+    with pytest.raises(RuntimeError, match="bras en échec"):
+        rb.run_campaign([spec], protocol, tmp_path, mcq_items(), energy_tracker=tracker, **kw)
+    assert tracker.stops == 1
+    assert any("traqueur" in m for m in logs)
+    assert not (tmp_path / "energy_units.json").exists()
+
+
+def test_stop_failure_after_successful_unit_is_raised(tmp_path):
+    spec = rb.MODELS["0.8b"]
+    protocol = rb.Protocol(n_tone=10, n_mcq=6, secondary_phases=("tone",))
+    with pytest.raises(OSError, match="traqueur en échec"):
+        rb.run_campaign(
+            [spec], protocol, tmp_path, mcq_items(), energy_tracker=BrokenTracker(), **_tone_kw()
+        )
+
+
 def test_energy_resume_mixing_units_refused(tmp_path):
     rt = {"llama_cpp": "0.3", "device": "CPU"}
     on = {**rt, "energy": True, "energy_country": "FRA"}
@@ -624,3 +657,27 @@ def test_short_run_secondary_report_stays_in_out():
     assert rb.secondary_report_path(rb.parse_args([])) == rb.DEFAULT_SECONDARY_REPORT
     explicit = rb.parse_args(["--secondary-report", "y.md"])
     assert rb.secondary_report_path(explicit) == Path("y.md")
+
+
+def test_energy_tracker_stopped_and_reading_saved_when_unit_fails(tmp_path):
+    class Boom(FakeBackend):
+        def generate(self, prompt, system, max_tokens, seed):
+            raise RuntimeError("boom")
+
+    spec = rb.MODELS["0.8b"]
+    protocol = rb.Protocol(n_tone=10, n_mcq=6, secondary_phases=("tone",))
+    tracker = FakeTracker()
+    kw = {**_tone_kw(), "backend_factory": lambda s: Boom()}
+    with pytest.raises(RuntimeError, match="boom"):
+        rb.run_campaign([spec], protocol, tmp_path, mcq_items(), energy_tracker=tracker, **kw)
+    assert (tracker.starts, tracker.stops) == (1, 1)
+    assert list(rb.load_energy_units(tmp_path)) == [f"{spec.model_id}/tone/neutral"]
+
+
+def test_read_jsonl_refuses_corrupt_final_file(tmp_path):
+    p = tmp_path / "runs.jsonl"
+    p.write_text('{"device": "CPU"}\n{"device": "GPU"\n{"device": "CPU"}\n', "utf-8")
+    with pytest.raises(ValueError, match="illisible"):
+        rb.read_jsonl(p)
+    with pytest.raises(FileNotFoundError):
+        rb.read_jsonl(tmp_path / "absent.jsonl")

@@ -1,9 +1,15 @@
-"""Agrégation par bras : moyenne et IC95 par bootstrap percentile."""
+"""Agrégation par bras : moyenne, IC95 par bootstrap percentile, bootstrap apparié.
+
+Un seul générateur (``random.Random(seed)``) et un seul percentile pour tout le dépôt. Le
+critère de « ton déplacé » (dose utile) est unique : l'IC95 du bootstrap apparié de la
+différence (bras - neutre) exclut 0 (``excludes_zero``, ``paired_shift``).
+"""
 
 from __future__ import annotations
 
+import math
 import random
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 
@@ -15,12 +21,21 @@ class Interval:
     n: int
 
 
-def _percentile(sorted_values: Sequence[float], q: float) -> float:
+def percentile(sorted_values: Sequence[float], q: float) -> float:
     """Percentile ``q`` dans [0, 1], interpolation linéaire."""
     pos = q * (len(sorted_values) - 1)
     lo = int(pos)
     hi = min(lo + 1, len(sorted_values) - 1)
     return sorted_values[lo] + (sorted_values[hi] - sorted_values[lo]) * (pos - lo)
+
+
+def interval_from_draws(draws: Sequence[float], point: float, *, level: float = 0.95) -> Interval:
+    """IC percentile des tirages valides (nan écartés) autour d'une estimation ponctuelle."""
+    v = sorted(x for x in draws if not math.isnan(x))
+    if not v:
+        return Interval(point, math.nan, math.nan, 0)
+    alpha = (1.0 - level) / 2.0
+    return Interval(point, percentile(v, alpha), percentile(v, 1.0 - alpha), len(v))
 
 
 def bootstrap_ci(
@@ -34,11 +49,74 @@ def bootstrap_ci(
     n = len(values)
     mean = sum(values) / n
     rng = random.Random(seed)
-    means = sorted(sum(rng.choices(values, k=n)) / n for _ in range(n_boot))
-    alpha = (1.0 - level) / 2.0
-    low = _percentile(means, alpha)
-    high = _percentile(means, 1.0 - alpha)
-    return Interval(mean=mean, low=low, high=high, n=n)
+    means = [sum(rng.choices(values, k=n)) / n for _ in range(n_boot)]
+    iv = interval_from_draws(means, mean, level=level)
+    return Interval(mean, iv.low, iv.high, n)
+
+
+def paired_bootstrap_diff(
+    a: Sequence[float], b: Sequence[float], *, n_boot: int = 2000, seed: int = 0
+) -> Interval:
+    """Moyenne des écarts par item ``a_i - b_i`` (séquences alignées) et IC95 percentile."""
+    if not a or len(a) != len(b):
+        raise ValueError("séquences appariées vides ou de longueurs différentes")
+    return bootstrap_ci([x - y for x, y in zip(a, b, strict=True)], n_boot=n_boot, seed=seed)
+
+
+def paired_bootstrap_stat(
+    columns: Mapping[str, Sequence[float]],
+    stat: Callable[[Mapping[str, Sequence[float]]], float],
+    *,
+    n_boot: int = 2000,
+    seed: int = 0,
+) -> Interval:
+    """Valeur de ``stat`` et IC95 percentile ; les items sont rééchantillonnés ensemble.
+
+    ``columns`` : colonnes alignées par item (mêmes indices tirés pour toutes). ``stat`` reçoit
+    les colonnes rééchantillonnées (listes) ; ses nan sont écartés de l'IC.
+    """
+    n = len(next(iter(columns.values())))
+    if n == 0 or any(len(c) != n for c in columns.values()):
+        raise ValueError("colonnes vides ou de longueurs différentes")
+    if n_boot < 1:
+        raise ValueError("n_boot doit être >= 1")
+    rng = random.Random(seed)
+    draws = []
+    for _ in range(n_boot):
+        idx = rng.choices(range(n), k=n)
+        draws.append(stat({k: [v[i] for i in idx] for k, v in columns.items()}))
+    return interval_from_draws(draws, stat(columns))
+
+
+def excludes_zero(iv: Interval | None, direction: int = 0) -> bool:
+    """L'IC95 exclut 0 : ``direction`` +1 (côté positif), -1 (côté négatif) ou 0 (l'un ou l'autre).
+
+    ``None`` (pas de mesure) et un IC nan ne l'excluent pas.
+    """
+    if iv is None or math.isnan(iv.low) or math.isnan(iv.high):
+        return False
+    if direction > 0:
+        return iv.low > 0
+    if direction < 0:
+        return iv.high < 0
+    return iv.low > 0 or iv.high < 0
+
+
+def paired_shift(
+    arm: Sequence[float],
+    neutral: Sequence[float],
+    *,
+    direction: int,
+    n_boot: int = 2000,
+    seed: int = 0,
+) -> bool:
+    """Critère unique de « ton déplacé » (dose utile) : IC95 apparié de ``bras - neutre``.
+
+    Vrai si l'IC95 du bootstrap apparié de la différence moyenne exclut 0 du côté de
+    ``direction`` (signe de la dose).
+    """
+    diff = paired_bootstrap_diff(arm, neutral, n_boot=n_boot, seed=seed)
+    return excludes_zero(diff, direction)
 
 
 def aggregate(
