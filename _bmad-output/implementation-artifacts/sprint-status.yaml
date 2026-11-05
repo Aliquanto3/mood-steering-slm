@@ -48,18 +48,18 @@ development_status:
   2-3-module-schedule-dose-par-token: done
   epic-2-retrospective: optional
 
-  epic-3: in-progress
+  epic-3: done
   3-1-bras-et-runner-du-banc: done
   3-2-mesure-du-ton-classifieur-et-juge-en-aveugle: done
   3-3-exactitude-et-complaisance: done
   3-4-rapport-et-verdict-h1-h3-h4: done
-  3-5-campagne-de-mesure-sur-la-tour: in-progress
+  3-5-campagne-de-mesure-sur-la-tour: done
   epic-3-retrospective: optional
 
   epic-4: in-progress
   4-1-serveur-fastapi-et-trois-flux-sse: done
   4-2-interface-trois-colonnes-curseur-et-courbe-de-dose: done
-  4-3-répétition-sur-le-portable-et-release-v0-1-0: backlog
+  4-3-répétition-sur-le-portable-et-release-v0-1-0: in-progress
   epic-4-retrospective: optional
 
   epic-5: in-progress

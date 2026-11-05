@@ -275,3 +275,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 04:57 · 3.5 · PR · #19 ouverte · 66f2d0d
 - 2026-11-05 04:58 · 3.5 · CI · verte sur les six jobs · 66f2d0d
 - 2026-11-05 04:58 · 3.5 · fusion · #19 fusionnée, MERGED vérifié · 051c2ca
+- 2026-11-05 04:59 · 4.3 · dev · lancé (Sonnet, worktree) : docs/demo.md, répétition CPU sur la tour, version 0.1.0, notes de release · —
