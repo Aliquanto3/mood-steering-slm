@@ -269,3 +269,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 04:41 · 3.5 · review · lancée (Opus), rejugement autorisé si estimation ≤ 0,55 $ (plafond juge 1 $) · —
 - 2026-11-05 04:46 · 3.5 · review · passe 1 : 4 medium corrigés (juge 128 tokens, mises en garde complaisance et H2, reprise tolérante), 4 low dont 3 corrigés ; rejugement reporté par le reviewer (appel payant interdit à l'agent) · 38d8b9e
 - 2026-11-05 04:46 · 3.5 · décision · rejugement lancé par l'orchestrateur (plafond 0,55 $, ancien judge.json gardé en judge.v1.json) · —
+- 2026-11-05 04:54 · 3.5 · décision · juge relancé à 128 tokens : 13 invalides sur 200 (contre 56), coût 0,45 $ (0,87 $ au total, plafond 1 $), rapport mis à jour · 0c95dd9
+- 2026-11-05 04:54 · 3.5 · review · passe 2 lancée (Opus) · —
