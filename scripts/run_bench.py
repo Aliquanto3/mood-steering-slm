@@ -243,11 +243,12 @@ def run_unit(
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    """Lignes d'un JSONL terminé (``FileNotFoundError`` s'il manque) ; lecture de ``resumable``."""
+    """Lignes d'un JSONL terminé : ``FileNotFoundError`` s'il manque, ``ValueError`` sur une ligne
+    illisible (jamais de troncature silencieuse hors reprise)."""
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(path)
-    return read_rows(path)
+    return read_rows(path, strict=True)
 
 
 def second_turn_items(
@@ -462,11 +463,19 @@ def run_campaign(
                     deadline=deadline,
                     **kw,
                 )
-            finally:
+            except BaseException:
                 if tracked:
-                    reading = energy_tracker.stop()
-                    energy_units[key] = _add_reading(energy_units.get(key), reading)
-                    save_energy_units(out, energy_units)
+                    try:  # lecture partielle conservée, sans masquer l'exception de l'unité
+                        reading = energy_tracker.stop()
+                        energy_units[key] = _add_reading(energy_units.get(key), reading)
+                        save_energy_units(out, energy_units)
+                    except Exception as exc:
+                        log(f"{key} : arrêt du traqueur d'énergie en échec ({exc!r})")
+                raise
+            if tracked:
+                reading = energy_tracker.stop()
+                energy_units[key] = _add_reading(energy_units.get(key), reading)
+                save_energy_units(out, energy_units)
             log(
                 f"{spec.model_id} {phase} {arm.name} : {time.monotonic() - t0:.0f} s"
                 + ("" if complete else " (interrompu, à reprendre)")

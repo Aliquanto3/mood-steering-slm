@@ -29,4 +29,17 @@ context:
 
 ## Reports
 
-- Le `finally` de `run_bench.run_campaign` ne protège pas l'exception du bras si `energy_tracker.stop()` échoue (le chemin mort le faisait) : à traiter à part.
+- Aucun (le `finally` de `run_campaign` est corrigé en revue, passe 1).
+
+## Revue
+
+### Passe 1 (2026-11-05, SHA revu 3890be9)
+
+- Important · medium · second avis · corrigé : `run_campaign` laissait une erreur de `energy_tracker.stop()` masquer l'exception de l'unité (garde perdue avec le chemin mort de `runner`). Lecture partielle sauvée si possible, échec du traqueur journalisé, exception de l'unité relancée ; un `stop()` en échec après une unité réussie lève. Tests `test_stop_failure_does_not_mask_unit_exception` et `test_stop_failure_after_successful_unit_is_raised` sur le chemin réel.
+- Important · low · second avis · corrigé : `run_bench.read_jsonl` (fichiers terminés, `runs.jsonl`) tronquait en silence à une ligne illisible ; une ligne collée par un ajout après arrêt brutal dans `runs.jsonl` aurait fait sauter le contrôle d'environnement des reprises suivantes. `read_rows(strict=True)` lève `ValueError` ; vérifié sans erreur sur les 142 JSONL de `data/runs/`.
+- Nit · low · second avis · corrigé : `sycophancy.read_jsonl` coupait par `splitlines()` (U+2028) ; passe par `read_rows(strict=True)`.
+- Nit · low · second avis · rejeté : `Ci.excludes_zero` appelé par les seuls tests ; les verdicts de `run_axis` sont directionnels (`high < 0`, `low > 0`), équivalents à `excludes_zero(iv, ±1)` nan compris (comparaison fausse).
+- Nit · low · second avis · rejeté : test U+2028 + ligne tronquée pour `report_size` et `run_axis` ; les deux lisent par `resumable`, couvert dans `test_resumable.py`.
+- Nit · low · second avis · rejeté : tirages nan écartés dans `paired_boot` ; les colonnes de `run_axis` sont filtrées des nan avant le bootstrap (moyennes), aucun tirage nan possible.
+- Nit · low · second avis · accepté : lecture arrêtée à la première ligne illisible en reprise, comportement antérieur, documenté dans `resumable`.
+- Complexité : 0 constat (lectures complètes une fois par reprise ou par rapport).

@@ -18,10 +18,11 @@ from typing import Any
 Row = dict[str, Any]
 
 
-def read_rows(path: Path) -> list[Row]:
+def read_rows(path: Path, *, strict: bool = False) -> list[Row]:
     """Lignes complètes d'un JSONL ; ``[]`` si le fichier n'existe pas.
 
-    La première ligne illisible (tronquée par un arrêt brutal) et les suivantes sont ignorées.
+    La première ligne illisible (tronquée par un arrêt brutal) et les suivantes sont ignorées ;
+    avec ``strict`` (fichier terminé, écrit d'un bloc), elle lève ``ValueError``.
     """
     path = Path(path)
     if not path.is_file():
@@ -32,7 +33,9 @@ def read_rows(path: Path) -> list[Row]:
             continue
         try:
             rows.append(json.loads(line.decode("utf-8")))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            if strict:
+                raise ValueError(f"{path} : ligne JSONL illisible ({exc})") from exc
             break
     return rows
 

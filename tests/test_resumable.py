@@ -65,3 +65,28 @@ def test_clean_for_append_rewrites_without_truncated_line(tmp_path):
 def test_clean_for_append_does_not_create_missing_file(tmp_path):
     assert clean_for_append(tmp_path / "absent.jsonl") == []
     assert not (tmp_path / "absent.jsonl").exists()
+
+
+def test_read_rows_strict_raises_on_unreadable_line(tmp_path):
+    import pytest
+
+    p = tmp_path / "fini.jsonl"
+    p.write_bytes(_raw(ROWS[:1]) + b'{"item_id": "c", "out\n' + _raw(ROWS[1:]))
+    assert read_rows(p) == ROWS[:1]
+    with pytest.raises(ValueError, match="illisible"):
+        read_rows(p, strict=True)
+    p.write_bytes(_raw(ROWS))
+    assert read_rows(p, strict=True) == ROWS
+
+
+def test_final_jsonl_readers_keep_separators_and_refuse_corruption(tmp_path):
+    import pytest
+
+    from mood_steering.eval.sycophancy import read_jsonl as syco_read
+
+    p = tmp_path / "fini.jsonl"
+    p.write_bytes(_raw(ROWS))
+    assert syco_read(p) == ROWS
+    p.write_bytes(_raw(ROWS) + b'{"item_id": "c"')
+    with pytest.raises(ValueError):
+        syco_read(p)
