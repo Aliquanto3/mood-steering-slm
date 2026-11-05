@@ -267,3 +267,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 04:37 · décision · vecteurs régénérés par 3.5 copiés dans data/moods/ du dépôt principal (cos 0,993–0,996) · —
 - 2026-11-05 04:41 · 3.5 · second-avis · 0 high, 4 medium (juge 56/200 invalides, dénominateur complaisance, surinterprétation H2, splitlines U+2028), 4 low · a621925
 - 2026-11-05 04:41 · 3.5 · review · lancée (Opus), rejugement autorisé si estimation ≤ 0,55 $ (plafond juge 1 $) · —
+- 2026-11-05 04:46 · 3.5 · review · passe 1 : 4 medium corrigés (juge 128 tokens, mises en garde complaisance et H2, reprise tolérante), 4 low dont 3 corrigés ; rejugement reporté par le reviewer (appel payant interdit à l'agent) · 38d8b9e
+- 2026-11-05 04:46 · 3.5 · décision · rejugement lancé par l'orchestrateur (plafond 0,55 $, ancien judge.json gardé en judge.v1.json) · —
