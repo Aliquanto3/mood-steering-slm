@@ -375,3 +375,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 22:34 · A4 · CI · verte (6 jobs) · cf01767
 - 2026-11-05 22:34 · A4 · fusion · #31 fusionnée, MERGED vérifié · 5372d6d
 - 2026-11-05 22:35 · A4 · décision · environnement de mesure dans le worktree mss-a4 (venv séparé, pour ne pas toucher au venv torch de A2) : llama-cpp-python 0.3.36 CUDA repris du cache uv (plus de roue cu124 publiée pour 0.3.36, l'index retombe sur une compilation qui échoue), codecarbon ; GPU détecté · —
+- 2026-11-06 00:23 · A2 · mesure · finie (n=50, 2048 tokens) : tronquées origine 0,78, ablation 0,5 0,70, ablation 1,0 0,62, chirurgie 0,70 ; écart apparié origine − ablation 1,0 = +0,16 [0,04 ; 0,28] (discordants 9/1), autres IC contiennent 0 · —
+- 2026-11-06 00:23 · A4 · pilote · refusé (plancher --n-tone >= 50 pour le 4B) ; mesure complète lancée, ses premières unités servent de pilote · —
