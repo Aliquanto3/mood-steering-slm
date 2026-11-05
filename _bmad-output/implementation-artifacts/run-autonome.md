@@ -350,3 +350,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 07:58 · run · décision · tag v0.2.0 et release GitHub publiés ; topic status-bench conservé · 51e00e0
 - 2026-11-05 07:58 · run · fin · epics 1 à 6 done ; attente humaine : relecture des paires calme ↔ agitation (5.4), test de la démo sur le portable (4.3) · 51e00e0
 - 2026-11-05 08:34 · run · rétro · epics 5 (accepted-with-open-items) et 6 (rejected, décision d'Anaël), 9 actions · —
+- 2026-11-05 20:51 · run · décision · A9 accordée par Anaël : PR chore/etat-run → main ; A1 marquée faite (PR #28) · —
+- 2026-11-05 20:51 · A2 · pilote · lancé (origine seule, n=10, 2048 tokens, GPU RTX 3050) · —

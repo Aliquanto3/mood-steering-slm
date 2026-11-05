@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-04-2026 23:24
-last_updated: 11-05-2026 08:40
+last_updated: 11-05-2026 20:51
 project: mood-steering-slm
 project_key: NOKEY
 tracking_system: file-system
@@ -79,7 +79,7 @@ action_items:
     action: "A1 run_antiloop et run_pulse : lecture JSONL sur \n et reprise atomique,
       test U+2028, avant la relance 6.2"
     owner: "dev-story"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
   - id: "epic-5-retro-item-2-a3-relance-5-4-paires-relues-et-équilibr"
     epic: 5
