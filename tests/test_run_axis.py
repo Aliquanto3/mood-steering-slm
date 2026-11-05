@@ -382,3 +382,58 @@ def test_render_report_mentions_verdict_and_cosine(tmp_path):
     )  # fmt: skip
     assert "Verdict H5 : non tenue" in bad and "ne se distingue pas" in bad
     assert "LECTURE" in bad
+
+
+def test_lexicon_handles_elision_and_calm_phrases():
+    # « s'agite » compte comme « agite » ; « sans se presser » compte calme, pas « presser »
+    assert ra.lexicon_score("elle s'agite") == pytest.approx(50.0)
+    assert ra.lexicon_score("il marche sans se presser") == pytest.approx(-20.0)
+    assert ra.lexicon_score("il avance sans hâte") == pytest.approx(-25.0)
+
+
+def test_raw_proxy_ignores_items_without_sentence():
+    eff = {"neutral": (0, 0), "calm_p0.30": (0, 0), "agit_m0.30": (0, 0),
+           "joy_p0.30": (0, 0), "joycalm_p0.30": (0, 0)}  # fmt: skip
+    scores = _scores(eff)
+    for i, row in enumerate(scores["calm_p0.30"].values()):
+        row["sent_len"] = math.nan if i % 2 else scores["neutral"][f"t{i:03d}"]["sent_len"] + 5
+    stats, _, _ = ra.analyse(scores, (0.3,), n_boot=100)
+    assert stats["calm_p0.30"].raw["sent_len"].mean == pytest.approx(5.0)  # pas tiré vers 0
+
+
+def test_score_arms_refreshes_text_proxies_without_reclassifying(tmp_path):
+    backend = FakeBackend()
+    ra.run_axis(
+        SPEC, (0.3,), tmp_path, backend_factory=lambda: backend, vector_loader=_loader,
+        n_prompts=2, tokens=8, log=lambda m: None,
+    )  # fmt: skip
+    probs = {"anger": 0.1, "fear": 0.1, "surprise": 0.0, "joy": 0.6, "sadness": 0.2}
+    ra.score_arms(tmp_path, SPEC, (0.3,), lambda t: [probs] * len(t))
+    cache = tmp_path / SPEC.model_id / "axis_scores.json"
+    data = json.loads(cache.read_text(encoding="utf-8"))
+    data["neutral"]["tone000"]["lex"] = 999.0  # ancien lexique
+    data["neutral"]["tone000"]["valence"] = -0.5  # score du classifieur, à garder
+    cache.write_text(json.dumps(data), encoding="utf-8")
+
+    def no_classify(texts):
+        raise AssertionError("classifieur rappelé")
+
+    scores = ra.score_arms(tmp_path, SPEC, (0.3,), no_classify)
+    assert scores["neutral"]["tone000"]["lex"] != 999.0
+    assert scores["neutral"]["tone000"]["valence"] == -0.5
+
+
+def test_render_report_inconclusive_when_distinct_but_criteria_fail():
+    eff = {
+        "neutral": (0, 0),
+        "calm_p0.30": (-1, 3), "agit_m0.30": (1, -3),
+        "joy_p0.30": (0.1, 2), "joycalm_p0.30": (0, 0),
+    }  # fmt: skip
+    scores = _scores(eff)
+    stats, verdicts, sd = ra.analyse(scores, (0.3,), n_boot=200)
+    md = ra.render_report(
+        spec=SPEC, scales=(0.3,), cosines={8: 0.3}, scores=scores, stats=stats,
+        verdicts=verdicts, sd=sd, runtime={}, n_prompts=40, tokens=128, lecture=None,
+        extracts={},
+    )  # fmt: skip
+    assert "Verdict H5 : non concluante" in md

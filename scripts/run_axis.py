@@ -2,7 +2,11 @@
 
 Commande (le rapport suit la génération) :
 
-    uv run python scripts/run_axis.py --n-gpu-layers -1 --cuda-dll-dir <dossier des DLL CUDA>
+    uv run --extra llama --extra eval python scripts/run_axis.py --resume --n-gpu-layers -1 \\
+        --cuda-dll-dir <dossier des DLL CUDA>
+
+Rapport seul, depuis les sorties existantes (ni génération, ni llama.cpp ; le classifieur ne
+charge que pour un bras jamais classé) : ``--report-only``.
 
 Reprise : ``--resume`` saute les bras déjà écrits et reprend un bras interrompu à l'item
 suivant ; ``--max-minutes`` arrête proprement entre deux items (code retour 3). Sorties brutes :
@@ -57,7 +61,8 @@ PHASE = "axis"
 EXIT_INCOMPLETE = 3
 DEFAULT_OUT = Path("data") / "runs" / "axe-5-4"
 DEFAULT_REPORT = Path("docs") / "rapport-axe-calme.md"
-DEFAULT_SCALES = (0.3, 0.5)  # échelles absolues (dose x max_scale), plage utile du 4B
+# échelles absolues (dose x max_scale) mesurées ; 0.3 et 0.5 s'ajoutent par --scales 0.2,0.3,0.4,0.5
+DEFAULT_SCALES = (0.2, 0.4)
 N_PROMPTS = 50
 TOKENS = 128
 N_BOOT = 2000
@@ -79,8 +84,12 @@ AGITATION_PREFIXES = (
 )  # fmt: skip
 CALM_PREFIXES = (
     "calm", "paisib", "tranquill", "serein", "sérén", "apais", "doucement", "douceur", "doux",
-    "douce", "lent", "posé", "patien", "silenc", "détend", "repos", "sans hâte", "sans se presser",
+    "douce", "lent", "posé", "patien", "silenc", "détend", "repos",
 )  # fmt: skip
+# locutions de calme, comptées sur le texte puis retirées (« presser », « hâte » ne comptent pas
+# alors côté agitation)
+CALM_PHRASES = ("sans hâte", "sans se presser")
+_ELISION = re.compile(r"^(?:[cdjlmnst]|qu)['’]")
 _WORD = re.compile(r"[\wéèêëàâäîïôöùûüç'’-]+", re.IGNORECASE)
 _SENTENCE_END = re.compile(r"[.!?…]+")
 
@@ -269,12 +278,18 @@ def mean_sentence_len(text: str) -> float:
 
 def lexicon_score(text: str) -> float:
     """(mots d'agitation - mots de calme) pour 100 mots ; positif = plus d'activation."""
-    ws = words(text)
-    if not ws:
+    n = len(words(text))
+    if not n:
         return 0.0
+    low = " ".join(words(text))
+    calm = 0
+    for phrase in CALM_PHRASES:
+        calm += low.count(phrase)
+        low = low.replace(phrase, " ")
+    ws = [_ELISION.sub("", w) for w in low.split()]  # « s'agite » -> « agite »
     agit = sum(any(w.startswith(p) for p in AGITATION_PREFIXES) for w in ws)
-    calm = sum(any(w.startswith(p) for p in CALM_PREFIXES) for w in ws)
-    return 100.0 * (agit - calm) / len(ws)
+    calm += sum(any(w.startswith(p) for p in CALM_PREFIXES) for w in ws)
+    return 100.0 * (agit - calm) / n
 
 
 def activation_share(probs: Mapping[str, float]) -> float:
@@ -288,30 +303,47 @@ def activation_share(probs: Mapping[str, float]) -> float:
     return sum(float(probs[k]) for k in ACTIVATION_LABELS if k in probs) / total
 
 
-def score_text(text: str, probs: Mapping[str, float]) -> dict[str, float]:
+def text_proxies(text: str) -> dict[str, float]:
+    """Proxies calculés sur le texte seul (recalculables sans classifieur)."""
     refusal, degenerate = rb.output_flags(text)
     return {
-        "act_cls": activation_share(probs),
         "exclam": exclamation_rate(text),
         "lex": lexicon_score(text),
         "sent_len": mean_sentence_len(text),
-        "valence": float(probs["joy"]) - float(probs["sadness"]),
         "degenerate": float(degenerate),
         "refusal": float(refusal),
+    }
+
+
+def score_text(text: str, probs: Mapping[str, float]) -> dict[str, float]:
+    return {
+        "act_cls": activation_share(probs),
+        **text_proxies(text),
+        "valence": float(probs["joy"]) - float(probs["sadness"]),
     }
 
 
 def score_arms(
     out: Path, spec: Any, scales: Sequence[float], classify: Callable[[list[str]], Any]
 ) -> dict[str, dict[str, dict[str, float]]]:
-    """Scores ``{bras: {item_id: {proxy: valeur}}}``, mis en cache (``axis_scores.json``)."""
+    """Scores ``{bras: {item_id: {proxy: valeur}}}``, mis en cache (``axis_scores.json``).
+
+    Les proxies de texte d'un bras en cache sont recalculés depuis les sorties (un changement de
+    lexique s'applique sans reclasser) ; ``classify`` ne sert qu'aux bras absents du cache.
+    """
     cache = Path(out) / spec.model_id / "axis_scores.json"
     cached = json.loads(cache.read_text(encoding="utf-8")) if cache.exists() else {}
     changed = False
     for arm in build_arms(scales):
-        if arm.name in cached:
-            continue
         rows = rb.read_jsonl(unit_path(out, spec.model_id, arm.name))
+        if arm.name in cached:
+            for r in rows:
+                old = cached[arm.name][r["item_id"]]
+                new = {**old, **text_proxies(r["output"])}
+                if json.dumps(new) != json.dumps(old):
+                    cached[arm.name][r["item_id"]] = new
+                    changed = True
+            continue
         probs = classify([r["output"] for r in rows])
         cached[arm.name] = {
             r["item_id"]: score_text(r["output"], p) for r, p in zip(rows, probs, strict=True)
@@ -433,7 +465,9 @@ def arm_stats(
     cols = {"act": d["act"], "val": d["val"]}
     mean = lambda key: lambda c: float(c[key].mean())  # noqa: E731
     raw = {
-        k[2:]: _ci({"x": np.nan_to_num(v)}, mean("x"), n_boot, seed)
+        k[2:]: _ci({"x": v[~np.isnan(v)]}, mean("x"), n_boot, seed)  # sans phrase : écarté
+        if not np.isnan(v).all()
+        else Ci(math.nan, math.nan, math.nan)
         for k, v in d.items()
         if k.startswith("d_")
     }
@@ -547,12 +581,15 @@ def render_report(
     neutral = scores["neutral"]
     neutral_deg = float(np.mean([v["degenerate"] for v in neutral.values()]))
     held = [s for s, v in verdicts.items() if v.held]
+    # sans proxy d'activation validé, un critère (a)/(b) non satisfait ne réfute pas l'axe
     verdict = (
-        f"tenue à l'échelle {', '.join(f'{s:g}' for s in held)}"
-        if cos_ok and held
-        else "non tenue"
-        if not cos_ok or not any(v.a_held or v.b_held for v in verdicts.values())
+        "non tenue (axes non distincts)"
+        if not cos_ok
+        else f"tenue à l'échelle {', '.join(f'{s:g}' for s in held)}"
+        if held
         else "partielle"
+        if any(v.a_held or v.b_held for v in verdicts.values())
+        else "non concluante (critère non satisfait, proxies d'activation non validés)"
     )
     L = [
         "# Rapport H5 : second axe calme ↔ agitation",
@@ -563,10 +600,13 @@ def render_report(
         "## Méthode",
         "",
         f"- Modèle : `{spec.model_id}`, couches {spec.il_start} à {spec.il_end}, `max_scale` "
-        f"{spec.max_scale:g}. Vecteurs : `llama-cvector-generator --method mean`, "
-        "`src/mood_steering/pairs/joy_sadness.jsonl` (100 paires) et "
-        "`src/mood_steering/pairs/calm_agitation.jsonl` (paires calme posé contre agité ou "
-        "pressé, valence proche ; **non relues par Anaël**).",
+        f"{spec.max_scale:g} (repris de l'axe joie, l'axe calme n'a pas été calibré). Vecteurs : "
+        "`llama-cvector-generator --method mean`, `src/mood_steering/pairs/joy_sadness.jsonl` "
+        "(100 paires) et `src/mood_steering/pairs/calm_agitation.jsonl` (paires calme posé "
+        "contre agité ou pressé ; **non relues par Anaël**). La valence de ces paires n'est pas "
+        "équilibrée : le côté agité porte nettement plus de marqueurs négatifs (panique, retard, "
+        "stress, objets renversés) et le côté calme quelques marqueurs positifs (savourer, "
+        "plaisir) ; une part du cosinus avec joie ↔ tristesse vient donc des paires elles-mêmes.",
         "- llama.cpp n'accepte qu'un vecteur de contrôle par contexte (le suivant écrase le "
         "précédent) : le bras combiné pose `s_joie × v_joie + s_calme × v_calme`, somme faite "
         "côté numpy.",
@@ -591,7 +631,11 @@ def render_report(
         f"- IC95 : bootstrap percentile apparié par prompt ({N_BOOT} tirages, graine "
         f"{BOOT_SEED}), prompts rééchantillonnés ensemble pour tous les indicateurs d'un bras.",
         "",
-        "### Critères fixés avant la mesure",
+        "### Critères",
+        "",
+        "Seuils écrits avec le script, dans le même commit que les mesures : leur antériorité "
+        "n'est pas vérifiable dans l'historique. L'échelle 0,2 a été ajoutée après la "
+        "dégénérescence observée à 0,4.",
         "",
         f"- **Distinction** : |cos| < {COS_MAX:g} sur chacune des couches {spec.il_start} à "
         f"{spec.il_end} (cos² < {COS_MAX**2:.2f} : moins de la moitié du carré de la norme d'un "
@@ -679,8 +723,12 @@ def render_report(
         "style du texte, pas un état.",
         "- Un seul modèle (Qwen3.5-4B Q4_K_M), un seul jeu de 50 prompts neutres, génération "
         "gloutonne : un seul tirage par prompt.",
-        "- Les paires `calm_agitation.jsonl` n'ont pas été relues par Anaël ; les contrastes "
-        "(calme posé contre agité ou pressé) gardent une valence proche, sans garantie.",
+        "- Les paires `calm_agitation.jsonl` n'ont pas été relues par Anaël ; leur valence n'est "
+        "pas équilibrée (côté agité plus négatif), ce qui gonfle le cosinus avec joie ↔ "
+        "tristesse et rend le seuil de distinction plus facile à manquer qu'à passer.",
+        "- Le seuil de distinction |cos| < 0,7 est lâche : il écarte seulement deux axes "
+        "presque colinéaires.",
+        "- La rétention (b) compare des moyennes ponctuelles, sans IC sur le rapport.",
         "- Les cosinus portent sur des différences de moyennes (méthode `mean`) à 107 paires ; "
         "ils mesurent la proximité des directions, pas l'indépendance des effets sur le texte.",
         "",
@@ -705,6 +753,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--resume", action="store_true")
     p.add_argument("--max-minutes", type=float, default=None)
     p.add_argument("--no-report", action="store_true")
+    p.add_argument(
+        "--report-only", action="store_true", help="rapport depuis les sorties et cosine.json"
+    )
     p.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     return p.parse_args(argv)
 
@@ -713,6 +764,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     scales = tuple(float(x) for x in args.scales.split(",") if x)
     spec = rb.MODELS["4b"]
+    if args.report_only:
+        return write_report(args, spec, scales)
     if args.cuda_dll_dir is not None:
         os.environ["PATH"] = str(args.cuda_dll_dir.resolve()) + os.pathsep + os.environ["PATH"]
     vec_paths = {
@@ -777,13 +830,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.no_report:
         return 0
 
-    from mood_steering.eval.tone import EMOTION_MODEL, EMOTION_REVISION, load_hf_classifier
-
     joy_v = load_vector(vec_paths[AXIS_JOY])
     calm_v = load_vector(vec_paths[AXIS_CALM])
     cosines = cosine_by_layer(calm_v, joy_v, spec.il_start, spec.il_end)
     (args.out / "cosine.json").write_text(json.dumps(cosines, indent=1), "utf-8", newline="\n")
-    classify = load_hf_classifier(EMOTION_MODEL, revision=EMOTION_REVISION)
+    return write_report(args, spec, scales, runtime)
+
+
+def write_report(
+    args: argparse.Namespace, spec: Any, scales: Sequence[float], runtime: Mapping | None = None
+) -> int:
+    """Rapport depuis les sorties, ``cosine.json`` et le cache de scores (sans génération)."""
+    if runtime is None:
+        runs = (args.out / "runs.jsonl").read_text(encoding="utf-8").splitlines()
+        runtime = json.loads(runs[-1]) if runs else {}
+    cosines = {
+        int(k): float(v)
+        for k, v in json.loads((args.out / "cosine.json").read_text("utf-8")).items()
+    }
+
+    def classify(texts: list[str]) -> Any:  # chargé seulement pour un bras jamais classé
+        from mood_steering.eval.tone import EMOTION_MODEL, EMOTION_REVISION, load_hf_classifier
+
+        return load_hf_classifier(EMOTION_MODEL, revision=EMOTION_REVISION)(texts)
+
     scores = score_arms(args.out, spec, scales, classify)
     stats, verdicts, sd = analyse(scores, scales)
     extracts = {}
