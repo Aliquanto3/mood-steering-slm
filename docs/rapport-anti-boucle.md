@@ -21,19 +21,25 @@ Les directions viennent du diff du MIT (voir `mood_steering.ablation.load_direct
 Jeu : `load_global_mmlu_lite(n=100)`, QCM en français, graine fixe. Mesures par bras :
 
 - taux de réponses tronquées : la génération atteint le plafond sans token de fin ;
-- exactitude : `extract_letter`, les réponses sans lettre extraite comptent fausses (donc une réponse tronquée compte fausse) ;
+- exactitude : `extract_letter`, les réponses sans lettre extraite comptent fausses, et une réponse tronquée compte fausse même si une lettre en sort (raisonnement inachevé) ;
 - longueur moyenne en tokens ;
 - IC95 par bootstrap percentile (`eval.stats.bootstrap_ci`).
 
-Commande (la dépendance `transformers>=5` n'est pas celle des extras du dépôt, qui bornent `<5`, d'où l'environnement à part ; pour un GPU, utiliser une roue torch CUDA) :
+Fin de réponse : union de `generation_config.eos_token_id`, du `eos_token_id` du tokenizer et de `<|im_end|>` (le `config.json` de Qwen3.5 ne donne que `<|endoftext|>`) ; la liste retenue est écrite dans `summary.json`.
+
+Commande (extra `ablation`, qui tire `transformers>=5` pour Qwen3.5 ; il est en conflit avec l'extra `eval`, borné `<5`, et ne s'installe pas avec lui ; pour un GPU, utiliser une roue torch CUDA) :
 
 ```powershell
-uv run --no-project --with-editable . --with "transformers>=5.22.1" --with torch --with accelerate `
-  python scripts/run_antiloop.py --run-id <id> --n 100 --max-new-tokens 512 `
-  --device cuda --dtype bfloat16 --directions-dir <dossier des layer15.npy / layer19.npy>
+uv sync --extra ablation
+uv run --extra ablation python scripts/run_antiloop.py --run-id <id> --n 100 --max-new-tokens 512 `
+  --origin <slm-weight-editing>/models/hf/qwen3.5-base `
+  --surgery <slm-weight-editing>/models/hf/qwen3.5-wsp `
+  --directions-dir <dossier des layer15.npy / layer19.npy> --device cuda --dtype bfloat16
 ```
 
-Sorties : `data/runs/antiloop/<id>/<bras>.jsonl` (une ligne par item, reprise en relançant la même commande) et `summary.json`.
+`--origin` et `--surgery` sont obligatoires (ou `ANTILOOP_ORIGIN` / `ANTILOOP_SURGERY`). La configuration (chemins, `n`, source des items, plafond, `thinking`, device, dtype, versions de torch et transformers) est figée dans `config.json` au premier lancement : une reprise sous une autre configuration est refusée.
+
+Sorties : `data/runs/antiloop/<id>/<bras>.jsonl` (une ligne par item, reprise en relançant la même commande) et `summary.json` (configuration, dtype effectif et tokens de fin par modèle, mesures par bras ; un lancement partiel `--arms` garde les bras déjà mesurés).
 
 ## Comparaison avec slm-quality-bench
 

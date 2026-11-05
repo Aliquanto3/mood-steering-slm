@@ -8,16 +8,22 @@ même gabarit de chat, transformers) :
 - ``ablation@<alpha>`` : modèle d'origine + ``DirectionAblator`` (directions par couche, dosable).
 
 Mesures par bras : taux de réponses tronquées (le plafond est atteint sans token de fin), exactitude
-QCM (non-extraits comptés faux), longueur moyenne, avec IC95 bootstrap. Aucun poids ni direction
-n'est versionné : sorties sous ``data/runs/antiloop/<run_id>/`` (ignoré).
+QCM (non-extraits et tronquées comptés faux), longueur moyenne, avec IC95 bootstrap. Aucun poids
+ni direction n'est versionné : sorties sous ``data/runs/antiloop/<run_id>/`` (ignoré).
 
-    uv run python scripts/run_antiloop.py --run-id r1 --n 100 --max-new-tokens 512
+    uv run --extra ablation python scripts/run_antiloop.py --run-id r1 --origin <base> \\
+        --surgery <wsp> --directions-dir <dossier layer15.npy / layer19.npy>
+
+``--origin`` et ``--surgery`` sont obligatoires, sauf si ``ANTILOOP_ORIGIN`` / ``ANTILOOP_SURGERY``
+sont définies. La configuration du run est figée dans ``config.json`` : une reprise sous une autre
+configuration est refusée.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -29,9 +35,8 @@ from mood_steering.eval.stats import bootstrap_ci
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS_DIR = ROOT / "data" / "runs" / "antiloop"
-SIBLING = Path.home() / "Documents" / "GitHub" / "slm-weight-editing" / "models" / "hf"
-DEFAULT_ORIGIN = SIBLING / "qwen3.5-base"
-DEFAULT_SURGERY = SIBLING / "qwen3.5-wsp"
+DIRECTION_LAYERS = (15, 19)
+END_OF_TURN = "<|im_end|>"  # fin de tour ChatML (Qwen) : absente du eos_token_id de config.json
 
 # (génère la réponse d'un prompt) -> (texte, nombre de tokens générés, fin naturelle atteinte)
 Generate = Callable[[str], tuple[str, int, bool]]
@@ -59,7 +64,49 @@ def build_arms(alphas: Sequence[float], only: Sequence[str] | None = None) -> li
 
 def is_truncated(generated_ids: Sequence[int], max_new_tokens: int, eos_ids: Sequence[int]) -> bool:
     """Tronquée : le plafond est atteint et aucun token de fin n'a été émis."""
-    return len(generated_ids) >= max_new_tokens and not any(t in eos_ids for t in generated_ids)
+    eos = set(eos_ids)
+    return len(generated_ids) >= max_new_tokens and not any(t in eos for t in generated_ids)
+
+
+def collect_eos_ids(tok: Any, model: Any) -> list[int]:
+    """Union des tokens de fin : ``generation_config``, tokenizer et ``<|im_end|>`` s'il est connu.
+
+    Qwen3.5 met ``<|endoftext|>`` dans ``config.json`` mais termine ses tours par ``<|im_end|>`` :
+    sans l'union, une réponse finie serait comptée tronquée (et la génération continuerait).
+    """
+    ids: set[int] = set()
+    cfg = getattr(model, "generation_config", None)
+    for eos in (getattr(cfg, "eos_token_id", None), getattr(tok, "eos_token_id", None)):
+        if isinstance(eos, int):
+            ids.add(eos)
+        elif isinstance(eos, (list, tuple)):
+            ids.update(int(e) for e in eos)
+    end = tok.convert_tokens_to_ids(END_OF_TURN)
+    if isinstance(end, int) and end >= 0 and end != getattr(tok, "unk_token_id", None):
+        ids.add(end)
+    if not ids:
+        raise ValueError("aucun token de fin connu : troncature non mesurable")
+    return sorted(ids)
+
+
+def check_run_config(run_dir: Path, config: Mapping[str, Any]) -> None:
+    """Écrit ``config.json`` au premier lancement ; refuse une reprise sous une autre config."""
+    path = run_dir / "config.json"
+    current = json.loads(json.dumps(config))  # normalise (tuples en listes)
+    if path.is_file():
+        previous = json.loads(path.read_text(encoding="utf-8"))
+        keys = previous.keys() | current.keys()
+        diff = sorted(k for k in keys if previous.get(k) != current.get(k))
+        if diff:
+            raise ValueError(f"{path} : configuration différente du run existant ({diff})")
+        return
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(current, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def item_sources(items: Sequence[McqItem]) -> list[str]:
+    """Source des items, lue dans le préfixe des ids (``gmmlu-fr`` ou ``mmmlu-fr``)."""
+    return sorted({i.id.split(":", 1)[0] for i in items})
 
 
 def arm_file(run_dir: Path, arm: Arm) -> Path:
@@ -126,7 +173,11 @@ def summarize_arm(records: Sequence[Mapping[str, Any]], items: Sequence[McqItem]
     recs = [by_id[i.id] for i in items]
     trunc = [1.0 if r["truncated"] else 0.0 for r in recs]
     letters = [extract_letter(r["output"]) for r in recs]
-    correct = [1.0 if letter == i.answer else 0.0 for letter, i in zip(letters, items, strict=True)]
+    # Une réponse tronquée (raisonnement inachevé) compte fausse, même si une lettre en sort.
+    correct = [
+        1.0 if letter == i.answer and not r["truncated"] else 0.0
+        for letter, i, r in zip(letters, items, recs, strict=True)
+    ]
     return {
         "n": len(recs),
         "truncation_rate": _ci(trunc),
@@ -151,9 +202,7 @@ def _load(path: Path, device: str, dtype: str) -> tuple[Any, Any]:
 def make_generate(tok: Any, model: Any, max_new_tokens: int, thinking: bool = True) -> Generate:
     import torch
 
-    cfg = model.generation_config
-    eos = cfg.eos_token_id if cfg.eos_token_id is not None else tok.eos_token_id
-    eos_ids = list(eos) if isinstance(eos, (list, tuple)) else [eos]
+    eos_ids = collect_eos_ids(tok, model)
 
     def generate(prompt: str) -> tuple[str, int, bool]:
         text = tok.apply_chat_template(
@@ -168,6 +217,7 @@ def make_generate(tok: Any, model: Any, max_new_tokens: int, thinking: bool = Tr
                 **enc,
                 do_sample=False,
                 max_new_tokens=max_new_tokens,
+                eos_token_id=eos_ids,
                 temperature=None,
                 top_p=None,
                 top_k=None,
@@ -179,6 +229,54 @@ def make_generate(tok: Any, model: Any, max_new_tokens: int, thinking: bool = Tr
     return generate
 
 
+def run_arms(
+    arms: Sequence[Arm],
+    items: Sequence[McqItem],
+    load: Callable[[str], tuple[Any, Any]],
+    make_gen: Callable[[Any, Any], Generate],
+    directions: Mapping[int, Any] | None,
+    run_dir: Path,
+    max_new_tokens: int,
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Joue les bras dans l'ordre ; ``DirectionAblator`` n'est posé que sur les bras ``ablation``
+    et retiré avant le bras suivant. ``summary.json`` garde les bras d'un lancement précédent."""
+    from mood_steering.ablation import DirectionAblator
+
+    path = run_dir / "summary.json"
+    previous: dict[str, Any] = {}
+    if path.is_file():
+        previous = json.loads(path.read_text(encoding="utf-8"))
+    for key in ("arms", "effective_dtype", "eos_token_ids"):  # par bras ou par modèle
+        summary[key] = {**previous.get(key, {}), **summary.get(key, {})}
+    loaded: dict[str, tuple[Any, Any]] = {}
+    for arm in arms:
+        key = "surgery" if arm.kind == "surgery" else "origin"
+        if key not in loaded:
+            loaded.clear()  # un seul modèle en mémoire
+            loaded[key] = load(key)
+        tok, model = loaded[key]
+        ablator = None
+        if arm.kind == "ablation":
+            if directions is None:
+                raise ValueError("bras ablation sans directions")
+            ablator = DirectionAblator(model, directions, arm.alpha or 0.0)
+        try:
+            records = run_arm(arm, items, make_gen(tok, model), run_dir, max_new_tokens)
+        finally:
+            if ablator:
+                ablator.remove()
+        summary["arms"][arm.name] = summarize_arm(records, items)
+        print(arm.name, json.dumps(summary["arms"][arm.name]), flush=True)
+        path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+    return summary
+
+
+def _env_path(name: str) -> Path | None:
+    value = os.environ.get(name)
+    return Path(value) if value else None
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--run-id", required=True)
@@ -186,8 +284,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--max-new-tokens", type=int, default=512)
     ap.add_argument("--alphas", type=float, nargs="+", default=[0.5, 1.0])
     ap.add_argument("--arms", nargs="+", help="sous-ensemble de bras (ex. origin ablation@1)")
-    ap.add_argument("--origin", type=Path, default=DEFAULT_ORIGIN)
-    ap.add_argument("--surgery", type=Path, default=DEFAULT_SURGERY)
+    origin, surgery = _env_path("ANTILOOP_ORIGIN"), _env_path("ANTILOOP_SURGERY")
+    ap.add_argument("--origin", type=Path, default=origin, required=origin is None)
+    ap.add_argument("--surgery", type=Path, default=surgery, required=surgery is None)
     ap.add_argument("--directions-dir", type=Path, default=ROOT / "data" / "directions")
     ap.add_argument(
         "--thinking",
@@ -201,50 +300,52 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     import numpy as np
+    import torch
+    import transformers
 
-    from mood_steering.ablation import DirectionAblator
     from mood_steering.eval.datasets import load_global_mmlu_lite
 
     if args.threads:
-        import torch
-
         torch.set_num_threads(args.threads)
     arms = build_arms(args.alphas, args.arms)
     items = load_global_mmlu_lite(n=args.n)
     run_dir = RUNS_DIR / args.run_id
-    summary: dict[str, Any] = {
-        "run_id": args.run_id,
+    paths = {"origin": args.origin, "surgery": args.surgery}
+    config = {
+        "origin": str(args.origin.resolve()),
+        "surgery": str(args.surgery.resolve()),
+        "directions_dir": str(args.directions_dir.resolve()),
         "n": len(items),
+        "item_sources": item_sources(items),
         "max_new_tokens": args.max_new_tokens,
         "thinking": args.thinking,
         "device": args.device,
         "dtype": args.dtype,
-        "arms": {},
+        "torch": torch.__version__,
+        "transformers": transformers.__version__,
     }
+    check_run_config(run_dir, config)
+    summary: dict[str, Any] = {"run_id": args.run_id, **config, "arms": {}}
 
-    loaded: dict[str, tuple[Any, Any]] = {}
-    for arm in arms:
-        key = "surgery" if arm.kind == "surgery" else "origin"
-        if key not in loaded:
-            loaded = {
-                key: _load(
-                    args.surgery if key == "surgery" else args.origin, args.device, args.dtype
-                )
-            }  # un seul modèle en mémoire
-        tok, model = loaded[key]
-        ablator = None
-        if arm.kind == "ablation":
-            dirs = {i: np.load(args.directions_dir / f"layer{i}.npy") for i in (15, 19)}
-            ablator = DirectionAblator(model, dirs, arm.alpha or 0.0)
-        try:
-            gen = make_generate(tok, model, args.max_new_tokens, args.thinking)
-            records = run_arm(arm, items, gen, run_dir, args.max_new_tokens)
-        finally:
-            if ablator:
-                ablator.remove()
-        summary["arms"][arm.name] = summarize_arm(records, items)
-        print(arm.name, json.dumps(summary["arms"][arm.name]), flush=True)
-        (run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    def load(key: str) -> tuple[Any, Any]:
+        tok, model = _load(paths[key], args.device, args.dtype)
+        summary.setdefault("effective_dtype", {})[key] = str(next(model.parameters()).dtype)
+        summary.setdefault("eos_token_ids", {})[key] = collect_eos_ids(tok, model)
+        return tok, model
+
+    directions = None
+    if any(a.kind == "ablation" for a in arms):
+        directions = {i: np.load(args.directions_dir / f"layer{i}.npy") for i in DIRECTION_LAYERS}
+    run_arms(
+        arms,
+        items,
+        load,
+        lambda tok, model: make_generate(tok, model, args.max_new_tokens, args.thinking),
+        directions,
+        run_dir,
+        args.max_new_tokens,
+        summary,
+    )
     return 0
 
 
