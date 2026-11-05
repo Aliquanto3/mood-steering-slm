@@ -1,13 +1,21 @@
 "use strict";
-// Interface de la démo : trois colonnes alimentées par un flux SSE (GET /stream).
+// Interface de la démo : trois colonnes alimentées par un flux SSE (GET /stream), lu par
+// fetch + ReadableStream (et non EventSource) : le code HTTP (200, 409, 422) est connu sans
+// seconde requête, et aucune reconnexion automatique ne relance de génération.
 // Texte : expression d'humeur (ton du texte) uniquement.
 
 const ARMS = ["neutral", "prompt_joyful", "steering"];
 const FALLBACK_TEXT = "pas de vecteur pour ce modèle : repli sur le prompt";
 const $ = (id) => document.getElementById(id);
-let source = null;
+const STOP_GRACE_MS = 2000; // un 409 dans ce délai après Arrêter : verrou serveur pas encore rendu
+const RETRY_DELAY_MS = 500;
+let controller = null; // AbortController de la génération en cours
 let config = null;
 let doseApplied = 0;
+let fallbackActive = false;
+let sawDone = false;
+let lastStopAt = 0;
+let curvePending = false;
 let steeringTokens = 0;
 let doseHistory = [];
 
@@ -58,9 +66,22 @@ function drawDoseCurve(points) {
     el("text", { x: W - R - 60, y: H - 8 }, "tokens"),
   );
   if (points.length === 0) return;
+  if (fallbackActive) {
+    svg.append(el("text", { class: "legend", x: W - R, y: T + 14, "text-anchor": "end" }, "repli : dose sans effet"));
+  }
   const d = points.map((p, i) => `${i ? "L" : "M"}${xOf(p.x).toFixed(1)} ${yOf(p.dose).toFixed(1)}`);
   if (points.length === 1) d.push(`L${xOf(1).toFixed(1)} ${yOf(points[0].dose).toFixed(1)}`);
-  svg.append(el("path", { class: "line", d: d.join(" ") }));
+  svg.append(el("path", { class: fallbackActive ? "line fallback" : "line", d: d.join(" ") }));
+}
+
+// Un tracé par image au plus, quel que soit le débit de tokens (sinon O(n²) sur la génération).
+function scheduleCurve() {
+  if (curvePending) return;
+  curvePending = true;
+  requestAnimationFrame(() => {
+    curvePending = false;
+    drawDoseCurve(doseHistory);
+  });
 }
 
 function resetColumns() {
@@ -73,6 +94,7 @@ function resetColumns() {
   }
   steeringTokens = 0;
   doseHistory = [];
+  fallbackActive = false;
   drawDoseCurve([]);
 }
 
@@ -83,11 +105,8 @@ function showBadge(arm, text, isError) {
   b.hidden = false;
 }
 
-function closeSource() {
-  if (source) {
-    source.close();
-    source = null;
-  }
+function finishStream() {
+  controller = null;
   setRunning(false);
 }
 
@@ -95,42 +114,111 @@ function handleEvent(ev) {
   if (ev.type === "start") {
     if (ev.arm === "steering") {
       doseApplied = ev.dose;
-      if (ev.fallback) showBadge("steering", FALLBACK_TEXT, false);
+      fallbackActive = Boolean(ev.fallback);
+      if (fallbackActive) showBadge("steering", FALLBACK_TEXT, false);
     }
   } else if (ev.type === "token") {
     const out = $("out-" + ev.arm);
     if (!out) return;
-    out.textContent += ev.text;
+    out.append(ev.text); // nœud texte ajouté : pas de recopie du texte déjà affiché
     if (ev.arm === "steering") {
-      doseHistory.push({ x: steeringTokens++, dose: doseApplied });
-      drawDoseCurve(doseHistory);
+      // En repli, la dose n'agit pas : on trace 0 (et la légende le dit).
+      doseHistory.push({ x: steeringTokens++, dose: fallbackActive ? 0 : doseApplied });
+      scheduleCurve();
     }
   } else if (ev.type === "error") {
-    showBadge(ev.arm, "Erreur : " + ev.message, true);
+    if ($("badge-" + ev.arm)) showBadge(ev.arm, "Erreur : " + ev.message, true);
   } else if (ev.type === "done") {
-    closeSource();
+    sawDone = true;
+    finishStream();
     setStatus("Génération terminée.", false);
   }
 }
 
-async function explainRefusal(params) {
-  // EventSource ne donne pas le code HTTP : on relit le statut de /stream pour le message.
+// Une trame SSE : lignes « data: ... » (les autres champs sont ignorés), terminée par une ligne vide.
+function dispatchFrame(frame) {
+  const data = frame
+    .split("\n")
+    .map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l))
+    .filter((l) => l.startsWith("data:"))
+    .map((l) => l.slice(l.startsWith("data: ") ? 6 : 5))
+    .join("\n");
+  if (data) handleEvent(JSON.parse(data));
+}
+
+async function refusalMessage(response) {
+  let detail = null;
   try {
-    const r = await fetch("/stream?" + params);
-    const code = r.status;
-    if (r.body) r.body.cancel();
-    if (code === 409) return "Une génération est déjà en cours : attendez qu'elle se termine.";
-    if (code === 422) return "Paramètres refusés : prompt vide ou trop long, ou dose hors de [−1 ; +1].";
-    if (code === 200) return "Connexion interrompue.";
-    return "Erreur du serveur (" + code + ").";
+    detail = (await response.json()).detail;
   } catch (e) {
-    return "Serveur injoignable.";
+    detail = null;
+  }
+  const code = response.status;
+  if (code === 409) return "Une génération est déjà en cours : attendez qu'elle se termine.";
+  if (code === 422) {
+    const why = typeof detail === "string" ? detail : "prompt vide ou trop long, ou dose hors de [−1 ; +1]";
+    return "Paramètres refusés : " + why + ".";
+  }
+  return "Erreur du serveur (" + code + ").";
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function runStream(params, retried) {
+  const ctrl = new AbortController();
+  controller = ctrl;
+  sawDone = false;
+  let response;
+  try {
+    response = await fetch("/stream?" + params, { signal: ctrl.signal, headers: { Accept: "text/event-stream" } });
+  } catch (e) {
+    if (controller !== ctrl) return; // arrêté par l'utilisateur
+    finishStream();
+    setStatus("Serveur injoignable.", true);
+    return;
+  }
+  if (controller !== ctrl) return;
+  if (response.status === 409 && !retried && Date.now() - lastStopAt < STOP_GRACE_MS) {
+    // Juste après Arrêter, le serveur libère son verrou un peu plus tard : un seul nouvel essai.
+    setStatus("Génération précédente en cours d'arrêt, nouvel essai…", false);
+    await sleep(RETRY_DELAY_MS);
+    if (controller !== ctrl) return;
+    return runStream(params, true);
+  }
+  if (!response.ok || !response.body) {
+    const message = await refusalMessage(response);
+    if (controller !== ctrl) return;
+    finishStream();
+    setStatus(message, true);
+    return;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let cut;
+      while ((cut = buffer.indexOf("\n\n")) >= 0) {
+        const frame = buffer.slice(0, cut);
+        buffer = buffer.slice(cut + 2);
+        dispatchFrame(frame);
+      }
+    }
+  } catch (e) {
+    if (controller !== ctrl) return; // AbortError après Arrêter
+  }
+  if (controller === ctrl && !sawDone) {
+    finishStream();
+    setStatus("Connexion interrompue.", true);
   }
 }
 
 function generate(event) {
   event.preventDefault();
-  if (source) return;
+  if (controller) return;
   const prompt = $("prompt").value.trim();
   if (!prompt) {
     setStatus("Saisissez un prompt.", true);
@@ -143,20 +231,15 @@ function generate(event) {
   }
   setStatus("Génération en cours…", false);
   setRunning(true);
-  const es = new EventSource("/stream?" + params);
-  source = es;
-  es.onmessage = (m) => handleEvent(JSON.parse(m.data));
-  es.onerror = async () => {
-    // Le flux se ferme après "done" (déjà traité) ; ici, c'est un refus ou une coupure.
-    if (source !== es) return;
-    closeSource();
-    setStatus(await explainRefusal(params), true);
-  };
+  runStream(params, false);
 }
 
 function stop() {
-  if (!source) return;
-  closeSource();
+  if (!controller) return;
+  const ctrl = controller;
+  finishStream();
+  ctrl.abort();
+  lastStopAt = Date.now();
   setStatus("Génération arrêtée.", false);
 }
 

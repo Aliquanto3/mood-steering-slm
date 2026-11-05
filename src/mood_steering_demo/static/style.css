@@ -30,3 +30,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 #dose-curve .zero { stroke:var(--muted); stroke-width:1; stroke-dasharray:4 3; }
 #dose-curve .line { stroke:var(--curve); stroke-width:2; fill:none; }
 @media (max-width: 800px) { .columns { grid-template-columns:1fr; } }
+#dose-curve .line.fallback { stroke-dasharray:6 4; }
+#dose-curve .legend { fill:var(--warn-fg); }
+/* Le SVG se réduit avec l'écran : police plus grande en unités du viewBox pour rester lisible. */
+@media (max-width: 500px) { #dose-curve text { font-size:15px; } }
