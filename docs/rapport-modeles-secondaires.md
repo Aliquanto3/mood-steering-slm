@@ -91,6 +91,7 @@ Seuil H4 : borne basse de l'IC95 percentile (unilatéral, 2,5 % nominal). Ce boo
 
 Règle : « non » si H1 n'est pas tenue ou si H4 vaut « non » (critère de mort : le prompt suffit) ; « oui » si H1 est tenue, H4 « oui » et H3 sans alerte et assez puissante pour en lever une ; « oui, mais » si H1 est tenue et H4 « oui », avec une alerte H3 ou une alerte H3 non détectable à cette taille d'échantillon.
 
+
 Couches 6 à 18, `max_scale` 0.15, doses +0.6667, +0.8333, +1, -0.6667, -0.8333, -1.
 
 ## Rapport de verdict : Qwen3.5-0.8B-Q4_K_M
@@ -181,3 +182,4 @@ Seuil H4 : borne basse de l'IC95 percentile (unilatéral, 2,5 % nominal). Ce boo
 **non** : H1 non tenue (aucune dose positive n'atteint le ton du prompt avec au plus 5 points de perte).
 
 Règle : « non » si H1 n'est pas tenue ou si H4 vaut « non » (critère de mort : le prompt suffit) ; « oui » si H1 est tenue, H4 « oui » et H3 sans alerte et assez puissante pour en lever une ; « oui, mais » si H1 est tenue et H4 « oui », avec une alerte H3 ou une alerte H3 non détectable à cette taille d'échantillon.
+
