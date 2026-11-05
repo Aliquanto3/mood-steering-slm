@@ -307,3 +307,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:24 · 5.1 · dev · lancé (Sonnet, worktree) : profil pulse dans la démo, scripts/run_pulse.py, rapport H6 · —
 - 2026-11-05 05:25 · 5.2 · review · passe 2 : aucun Important, 2 nuances de rédaction appliquées par l'orchestrateur · —
 - 2026-11-05 05:25 · 5.2 · PR · ouverte · —
+- 2026-11-05 05:27 · 5.2 · CI · rouge sur les trois OS : borne d'IC à 0,5999999999999999 dans test_model_stats_slopes_and_prompt_gap ; tolérance ajoutée, CI relancée · —
