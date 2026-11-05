@@ -5,6 +5,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -90,6 +91,11 @@ def test_profils_des_bras():
     assert pulse(47) < 1.0 and pulse(49) < 1.0
     with pytest.raises(ValueError, match="bras inconnu"):
         rp.arm_schedule("x")
+    # contrôles de la revue : prompt (token 0) sans vecteur puis pic ; pic dès le prompt
+    gen = rp.arm_schedule("constant_gen")
+    assert gen(0) == 0.0 and gen(1) == gen(191) == 1.0
+    decay = rp.arm_schedule("decay")
+    assert decay(0) == 1.0 and decay(32) == pytest.approx(0.5) and decay(1) < 1.0
 
 
 def test_generate_row_enregistre_fragments_tokens_et_doses():
@@ -154,10 +160,10 @@ def test_run_campaign_ecrit_trois_bras_et_reprend(tmp_path):
     for arm in rp.ARMS:
         rows = rp.load_rows(rp.arm_file(tmp_path, arm))
         assert [r["item_id"] for r in rows] == ["pulse000", "pulse001"]
-    assert len(backend.calls) == 6
+    assert len(backend.calls) == 2 * len(rp.ARMS)
     # reprise : rien n'est régénéré
     assert rp.run_campaign(steerer, items, tmp_path)
-    assert len(backend.calls) == 6
+    assert len(backend.calls) == 2 * len(rp.ARMS)
 
 
 def test_run_campaign_reprend_apres_ligne_tronquee_et_agrandissement(tmp_path):
@@ -168,7 +174,7 @@ def test_run_campaign_reprend_apres_ligne_tronquee_et_agrandissement(tmp_path):
     assert rp.run_campaign(steerer, prompts(2), tmp_path)
     rows = rp.load_rows(path)
     assert [r["item_id"] for r in rows] == ["pulse000", "pulse001"]
-    assert len(backend.calls) == 3 + 3  # le premier prompt n'a pas été refait
+    assert len(backend.calls) == 2 * len(rp.ARMS)  # le premier prompt n'a pas été refait
     assert path.read_text(encoding="utf-8").endswith("\n")
 
 
@@ -365,3 +371,138 @@ def test_main_rapport_sans_modele_quand_la_campagne_est_complete(tmp_path, monke
     assert code == 0
     assert report.read_text(encoding="utf-8").startswith("# H6")
     assert json.loads((out / "summary.json").read_text(encoding="utf-8"))["h6"]["lecture"]
+
+
+# --- moteur réel (LlamaCppBackend) sur un faux module llama_cpp : séquence des appels ----------
+
+
+class _LlamaLog:
+    """Faux ``llama_cpp`` (frontière externe) : journal commun des ``eval`` et des cvec.
+
+    Le ``Llama`` rend le token 5 (« ok »), puis le token de fin 99 à l'indice ``eog_at``.
+    """
+
+    def __init__(self, eog_at=None, n_ctx=2048, n_prompt=3):
+        self.log = []
+        self.eog_at = eog_at
+        self._n_ctx, self._n_prompt = n_ctx, n_prompt
+        self._ctx = SimpleNamespace(ctx="ctx")
+        self._model = SimpleNamespace(vocab="vocab")
+        self.n_sampled = 0
+
+    # interface Llama utilisée par LlamaCppBackend
+    def reset(self):
+        self.n_sampled = 0
+
+    def n_ctx(self):
+        return self._n_ctx
+
+    def tokenize(self, data, add_bos=False, special=False):
+        return list(range(1, self._n_prompt + 1))
+
+    def eval(self, toks):
+        self.log.append(("eval", len(toks)))
+
+    def sample(self, top_k, temp):
+        k, self.n_sampled = self.n_sampled, self.n_sampled + 1
+        return 99 if k == self.eog_at else 5
+
+    def detokenize(self, toks):
+        return b"ok"
+
+    # interface du module llama_cpp
+    def llama_vocab_is_eog(self, vocab, tok):
+        return tok == 99
+
+    def llama_set_adapter_cvec(self, ctx, buf, size, n_embd, il_start, il_end):
+        assert ctx == "ctx"
+        self.log.append(("cvec", None if buf is None else round(float(buf[0]), 3)))
+        return 0
+
+
+def _real_backend(**kw):
+    from mood_steering.steering import LlamaCppBackend
+
+    fake = _LlamaLog(**kw)
+    b = LlamaCppBackend.__new__(LlamaCppBackend)
+    b._llm, b._cpp, b.n_embd, b.n_layer, b.last_stop = fake, fake, N_EMBD, N_LAYER, None
+    b._chat_formatter = lambda: lambda messages: SimpleNamespace(prompt="P")  # gabarit Jinja
+    steerer = Steerer(b, np.ones((N_LAYER - 1, N_EMBD), np.float32), il_start=1, il_end=3)
+    return steerer, fake
+
+
+def _cvec_before_eval(log):
+    """Dose posée (premier coefficient du vecteur, ou None) avant chaque ``eval``."""
+    cur, out = None, []
+    for kind, val in log:
+        if kind == "cvec":
+            cur = val
+        else:
+            out.append(cur)
+    return out
+
+
+def test_moteur_reel_constant_gen_ne_steere_pas_le_prompt():
+    steerer, fake = _real_backend()
+    row = rp.generate_row(steerer, rp.ARM_CONSTANT_GEN, rp.pulse_prompts(1)[0], 0, 6)
+    assert fake.log[1] == ("eval", 3)  # prompt (3 tokens) évalué...
+    assert _cvec_before_eval(fake.log) == [None, 1.0, 1.0, 1.0, 1.0, 1.0]  # ...sans vecteur
+    # un seul changement de dose : pas de set_cvec rappelé quand la dose ne bouge pas
+    assert [v for k, v in fake.log if k == "cvec"] == [None, 1.0]
+    assert (row["n_tokens"], row["stop"]) == (6, "max_tokens")
+
+
+def test_moteur_reel_decay_steere_le_prompt_puis_decroit():
+    steerer, fake = _real_backend()
+    rp.generate_row(steerer, rp.ARM_DECAY, rp.pulse_prompts(1)[0], 0, 4)
+    expected = [round(0.5 ** (t / rp.HALF_LIFE), 3) for t in range(4)]
+    assert _cvec_before_eval(fake.log) == expected  # dose 1 sur le prompt, puis décroissance
+    assert fake.log[0] == ("cvec", None) and fake.log[2] == ("eval", 3)
+
+
+def test_moteur_reel_pulse_et_constant_sur_le_prompt():
+    steerer, fake = _real_backend()
+    rp.generate_row(steerer, rp.ARM_PULSE, rp.pulse_prompts(1)[0], 0, 3)
+    assert _cvec_before_eval(fake.log) == [None, round(1 / 48, 3), round(2 / 48, 3)]
+    steerer, fake = _real_backend()
+    rp.generate_row(steerer, rp.ARM_CONSTANT, rp.pulse_prompts(1)[0], 0, 3)
+    assert _cvec_before_eval(fake.log) == [1.0, 1.0, 1.0]
+
+
+def test_moteur_reel_distingue_fin_de_generation_et_contexte_plein():
+    steerer, _ = _real_backend(eog_at=4)
+    row = rp.generate_row(steerer, rp.ARM_NEUTRAL, rp.pulse_prompts(1)[0], 0, 192)
+    assert (row["n_tokens"], row["stop"], len(row["pieces"])) == (4, "eog", 4)
+    # contexte de 10 tokens, prompt de 3 : budget de 7 tokens, tous réels (pas de token de fin)
+    steerer, _ = _real_backend(n_ctx=10)
+    row = rp.generate_row(steerer, rp.ARM_NEUTRAL, rp.pulse_prompts(1)[0], 0, 192)
+    assert (row["n_tokens"], row["stop"], len(row["pieces"])) == (7, "n_ctx", 7)
+    # fin de génération sur le dernier token permis : il n'est pas compté
+    steerer, _ = _real_backend(eog_at=5)
+    row = rp.generate_row(steerer, rp.ARM_NEUTRAL, rp.pulse_prompts(1)[0], 0, 6)
+    assert (row["n_tokens"], row["stop"]) == (5, "eog")
+
+
+def test_analyse_controles_effet_sans_prompt_et_decroissance():
+    # constant_gen au neutre ; decay : joyeux au début, retombe au neutre en fin de sortie
+    rows = {
+        "neutral": [row("neutral", f"p{i}", [0] * 6) for i in range(4)],
+        "constant": [row("constant", f"p{i}", [32] * 6) for i in range(4)],
+        "pulse": [row("pulse", f"p{i}", [0] * 6) for i in range(4)],
+        "constant_gen": [row("constant_gen", f"p{i}", [0] * 6) for i in range(4)],
+        "decay": [row("decay", f"p{i}", [32, 24, 16, 8, 0, 0]) for i in range(4)],
+    }
+    s = rp.analyse(rows, FakeScorer(), n_boot=50, seed=0)
+    c = s["criteria"]
+    assert c["constant_gen_moins_neutre_debut"].mean == 0.0
+    assert c["constant_moins_constant_gen_debut"].mean == 2.0  # tout l'effet vient du prompt
+    assert c["decay_debut_moins_dernier"].mean == 2.0
+    assert c["constant_moins_decay_dernier"].mean == 2.0
+    assert s["h6"]["effet_sans_prompt"] is False and s["h6"]["decroissance_seule"] is True
+    md = rp.render_report(s, {})
+    assert "constant_gen" in md and "décroissance seule" in md and "Dose brute moyenne" in md
+    # constant_gen joyeux et decay plat : lecture inverse
+    rows["constant_gen"] = [row("constant_gen", f"p{i}", [32] * 6) for i in range(4)]
+    rows["decay"] = [row("decay", f"p{i}", [32] * 6) for i in range(4)]
+    s = rp.analyse(rows, FakeScorer(), n_boot=50, seed=0)
+    assert s["h6"]["effet_sans_prompt"] is True and s["h6"]["decroissance_seule"] is False

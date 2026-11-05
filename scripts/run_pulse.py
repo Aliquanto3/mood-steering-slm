@@ -1,12 +1,18 @@
 """Banc H6 (story 5.1) : pharmacocinétique, une dose qui monte, culmine puis décroît.
 
-Sur Qwen3.5-4B (couches 8-24, ``max_scale`` 0,7), trois bras sur des prompts de tâche
-ouverte et neutres de ton, sorties longues (192 tokens, génération gloutonne) :
+Sur Qwen3.5-4B (couches 8-24, ``max_scale`` 0,7), cinq bras sur des prompts de tâche
+ouverte et neutres de ton, sorties longues (192 tokens, génération gloutonne). Doses brutes
+dans [-1, 1], multipliées par ``max_scale`` dans le moteur ; la dose du token 0 s'applique
+aussi à l'évaluation du prompt (``mood_steering.schedule``) :
 
 - ``neutral`` : dose 0 ;
-- ``constant`` : dose du pic à tout token ;
+- ``constant`` : dose du pic à tout token, prompt compris ;
 - ``pulse`` : montée linéaire de 0 à la dose du pic en 48 tokens, puis décroissance
-  exponentielle (demi-vie 32 tokens).
+  exponentielle (demi-vie 32 tokens) ; prompt évalué sans vecteur ;
+- ``constant_gen`` (contrôle, revue 5.1) : dose 0 sur le prompt (et donc le token 0), puis
+  dose du pic dès le token 1 ; sépare l'effet de la dose par token de celui du prompt steeré ;
+- ``decay`` (contrôle, revue 5.1) : pic dès le token 0, prompt compris, puis décroissance
+  seule (demi-vie 32 tokens).
 
 Chaque sortie est découpée en segments de 32 tokens ; le ton (joie moins tristesse, classifieur
 de ``mood_steering.eval.tone``) est noté par segment, avec un IC95 bootstrap par segment et par
@@ -48,11 +54,13 @@ from mood_steering.steering import Steerer  # noqa: E402
 ARM_NEUTRAL = "neutral"
 ARM_CONSTANT = "constant"
 ARM_PULSE = "pulse"
-ARMS = (ARM_NEUTRAL, ARM_CONSTANT, ARM_PULSE)
+ARM_CONSTANT_GEN = "constant_gen"
+ARM_DECAY = "decay"
+ARMS = (ARM_NEUTRAL, ARM_CONSTANT, ARM_PULSE, ARM_CONSTANT_GEN, ARM_DECAY)
 SEGMENT = 32  # tokens par segment
 MAX_TOKENS = 192
 N_SEGMENTS = MAX_TOKENS // SEGMENT
-PEAK_DOSE = 1.0  # dose x max_scale (0,7) : la dose maximale mesurée par la campagne 3.5
+PEAK_DOSE = 1.0  # dose brute ; x max_scale (0,7) dans le moteur : la plus forte de la campagne 3.5
 RISE = 48  # token du sommet
 HALF_LIFE = 32.0
 PEAK_SEGMENT = RISE // SEGMENT
@@ -83,8 +91,26 @@ def pulse_prompts(n: int) -> list[rb.Item]:
     return [rb.Item(f"pulse{k:03d}", p) for k, p in enumerate(pool[:n])]
 
 
+def after_prompt(dose: float) -> DoseSchedule:
+    """Dose 0 au token 0 (donc sur le prompt), puis ``dose`` à partir du token 1.
+
+    Le token 0 est tiré des logits du prompt : c'est le plus tôt qu'on puisse steerer la
+    génération sans steerer le prompt.
+    """
+    constant(dose)  # validation de la dose
+
+    def schedule(t: int) -> float:
+        return 0.0 if t == 0 else dose
+
+    return schedule
+
+
 def arm_schedule(arm: str) -> DoseSchedule:
     """Profil de dose du bras ; tous passent par un profil (indice de token enregistré)."""
+    if arm == ARM_CONSTANT_GEN:
+        return after_prompt(PEAK_DOSE)
+    if arm == ARM_DECAY:
+        return pulse(0, PEAK_DOSE, HALF_LIFE)
     if arm == ARM_NEUTRAL:
         return constant(0.0)
     if arm == ARM_CONSTANT:
@@ -111,6 +137,13 @@ def generate_row(
         pieces.append(text)
         tok.append(len(stream.doses) - 1)  # la dose du token démarré est la dernière posée
     started = len(stream.doses)
+    # Cause de l'arrêt : le moteur réel la donne (``last_stop``) ; sinon, un arrêt avant
+    # ``max_tokens`` est lu comme un token de fin (le dernier token démarré n'est pas du texte).
+    last_stop = getattr(getattr(steerer, "_backend", None), "last_stop", None)
+    if last_stop == "eog" or (last_stop is None and started < max_tokens):
+        stop, n_tokens = "eog", started - 1
+    else:  # budget épuisé : max_tokens, ou contexte plein (n_ctx) avant max_tokens
+        stop, n_tokens = ("max_tokens" if started >= max_tokens else "n_ctx"), started
     return {
         "arm": arm,
         "item_id": item.id,
@@ -119,8 +152,8 @@ def generate_row(
         "pieces": pieces,
         "tok": tok,
         "doses": list(stream.doses),
-        # un arrêt avant max_tokens démarre un dernier token qui est la fin de génération
-        "n_tokens": started if started >= max_tokens else started - 1,
+        "n_tokens": n_tokens,
+        "stop": stop,
         "output": "".join(pieces),
         "fallback": stream.fallback,
         "latency_s": time.perf_counter() - t0,
@@ -303,9 +336,32 @@ def analyse(
         criteria["ecart_neutre_constant_moins_pulse_debut"] = paired(
             co, 0, pl, 0, absolute_to=ne, **kw
         )
+    cg, dc = tones.get(ARM_CONSTANT_GEN), tones.get(ARM_DECAY)
+    if cg is not None and ne is not None:
+        criteria["constant_gen_moins_neutre_debut"] = paired(cg, 0, ne, 0, **kw)
+        criteria["constant_gen_moins_neutre_dernier"] = paired(
+            cg, LAST_SEGMENT, ne, LAST_SEGMENT, **kw
+        )
+    if co is not None and cg is not None:
+        criteria["constant_moins_constant_gen_debut"] = paired(co, 0, cg, 0, **kw)
+    if dc is not None:
+        criteria["decay_debut_moins_dernier"] = paired(dc, 0, dc, LAST_SEGMENT, **kw)
+    if co is not None and dc is not None:
+        criteria["constant_moins_decay_dernier"] = paired(co, LAST_SEGMENT, dc, LAST_SEGMENT, **kw)
     redescente = positive(criteria.get("pulse_pic_moins_dernier"))
     montee = positive(criteria.get("pulse_pic_moins_debut"))
     debut = positive(criteria.get("ecart_neutre_constant_moins_pulse_debut"))
+    controls: dict[str, bool] = {}
+    if cg is not None and ne is not None:
+        # la dose par token, prompt non steeré, déplace-t-elle le ton (début ou fin) ?
+        controls["effet_sans_prompt"] = positive(
+            criteria.get("constant_gen_moins_neutre_debut")
+        ) or positive(criteria.get("constant_gen_moins_neutre_dernier"))
+    if dc is not None:
+        # décroissance seule : le ton redescend sur la sortie, et finit sous le constant
+        controls["decroissance_seule"] = positive(criteria.get("decay_debut_moins_dernier")) and (
+            co is None or positive(criteria.get("constant_moins_decay_dernier"))
+        )
     return {
         "tones": tones,
         "cells": cells,
@@ -316,6 +372,7 @@ def analyse(
             "pic_au_dessus_du_dernier": redescente,
             "pic_au_dessus_du_debut": montee,
             "debut_plus_proche_du_neutre": debut,
+            **controls,
             # « oui » : montée, redescente et début proche du neutre ; « oui, mais » : montée et
             # redescente lisibles sans le contraste de début ; « non » sinon
             "lecture": (
@@ -346,10 +403,19 @@ CRITERIA_LABELS = {
     "ecart_neutre_constant_moins_pulse_debut": (
         "premier segment : écart au neutre du constant - écart au neutre du pulse"
     ),
+    "constant_gen_moins_neutre_debut": "contrôle (a), premier segment : constant_gen - neutre",
+    "constant_gen_moins_neutre_dernier": "contrôle (a), dernier segment : constant_gen - neutre",
+    "constant_moins_constant_gen_debut": (
+        "premier segment : constant - constant_gen (part du prompt steeré)"
+    ),
+    "decay_debut_moins_dernier": "contrôle (b) : ton du premier segment - ton du dernier",
+    "constant_moins_decay_dernier": "dernier segment : ton constant - ton decay",
 }
 LIMITS = """\
 - Un seul modèle (Qwen3.5-4B quantifié Q4_K_M), un seul axe (joie ↔ tristesse), un seul profil
   d'impulsion (montée 48 tokens, demi-vie 32 tokens), une génération gloutonne par prompt.
+- Le token 0 est tiré des logits du prompt : le contrôle constant_gen ne peut steerer qu'à partir
+  du token 1, et le bras pulse (dose 0 au token 0) laisse lui aussi le prompt sans vecteur.
 - Le texte déjà produit reste dans le contexte : un ton installé peut se prolonger après la
   redescente de la dose sans que la dose y soit pour quelque chose. La mesure donne l'allure du
   ton, pas une cinétique du vecteur seul.
@@ -387,10 +453,15 @@ def render_report(
         f"device : {runtime.get('device', 'inconnu')} ; llama-cpp-python "
         f"{runtime.get('llama_cpp', 'inconnu')} ; commit `{runtime.get('git', '?')}`.",
         f"- {rates.get(ARM_NEUTRAL, {}).get('n', '?')} prompts de tâche ouverte, neutres de ton "
-        "(récits et descriptions, sujets du quotidien), les mêmes pour les trois bras.",
-        "- Bras : **neutral** (dose 0) ; **constant** (dose du pic, 1,0 x `max_scale`, à tout "
-        f"token) ; **pulse** (montée linéaire de 0 à la dose du pic en {RISE} tokens, puis "
-        f"décroissance exponentielle de demi-vie {HALF_LIFE:g} tokens).",
+        "(récits et descriptions, sujets du quotidien), les mêmes pour tous les bras.",
+        "- Doses brutes dans [-1, 1], multipliées par `max_scale` (0,7) dans le moteur ; la dose "
+        "du token 0 s'applique aussi à l'évaluation du prompt.",
+        "- Bras : **neutral** (dose 0) ; **constant** (dose du pic 1,0 à tout token, prompt "
+        f"compris) ; **pulse** (montée linéaire de 0 à la dose du pic en {RISE} tokens, puis "
+        f"décroissance exponentielle de demi-vie {HALF_LIFE:g} tokens ; prompt sans vecteur). "
+        "Contrôles ajoutés à la revue : **constant_gen** (a : dose 0 sur le prompt et le token "
+        "0, puis 1,0 dès le token 1) ; **decay** (b : pic 1,0 dès le token 0, prompt compris, "
+        f"puis décroissance seule de demi-vie {HALF_LIFE:g} tokens).",
         f"- Chaque sortie est découpée en {N_SEGMENTS} segments de {SEGMENT} tokens ; le ton "
         "est le score joie - tristesse du classifieur `tabularisai/multilingual-emotion-"
         "classification` (de -1, tristesse, à +1, joie). IC95 : bootstrap percentile sur les "
@@ -404,7 +475,12 @@ def render_report(
     for arm in ARMS:
         if arm in cells:
             lines.append(f"| {arm} | " + " | ".join(fmt_iv(c) for c in cells[arm]) + " |")
-    lines += ["", "Dose moyenne appliquée (dose x `max_scale`) par segment :", ""]
+    lines += [
+        "",
+        "Dose brute moyenne appliquée par segment (avant `max_scale` 0,7 ; dose effective = "
+        "dose brute x 0,7) :",
+        "",
+    ]
     lines += [head + " |", "|---|" + "---|" * N_SEGMENTS]
     for arm in ARMS:
         if arm in doses:
@@ -436,6 +512,18 @@ def render_report(
         "Lecture mécanique (montée : pic > premier segment ; redescente : pic > dernier segment ; "
         "début du pulse plus proche du neutre que celui du constant, IC95 apparié disjoint de 0 "
         f"pour chacun) : **{h6['lecture']}**.",
+        *(
+            [
+                "",
+                "Contrôles : effet de la dose par token sans prompt steeré (constant_gen > "
+                "neutre au premier ou au dernier segment) : "
+                f"**{'oui' if h6['effet_sans_prompt'] else 'non'}** ; décroissance seule "
+                "lisible (decay : premier segment > dernier, et dernier segment sous le "
+                f"constant) : **{'oui' if h6['decroissance_seule'] else 'non'}**.",
+            ]
+            if "effet_sans_prompt" in h6 and "decroissance_seule" in h6
+            else []
+        ),
         "",
         "## Lecture",
         "",

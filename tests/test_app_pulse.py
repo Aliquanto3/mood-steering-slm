@@ -107,4 +107,4 @@ def test_pulse_rise_zero_accepte_et_config_annonce_les_profils():
     assert [e["dose"] for e in steering_tokens(evs)] == [0.5, 0.25]
     cfg = client.get("/config").json()
     assert cfg["profiles"] == ["constant", "pulse"]
-    assert cfg["default_rise"] == 24 and cfg["default_half_life"] == 32.0
+    assert cfg["default_rise"] == 48 and cfg["default_half_life"] == 32.0

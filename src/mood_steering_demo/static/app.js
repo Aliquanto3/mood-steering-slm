@@ -161,7 +161,19 @@ async function refusalMessage(response) {
   const code = response.status;
   if (code === 409) return "Une génération est déjà en cours : attendez qu'elle se termine.";
   if (code === 422) {
-    const why = typeof detail === "string" ? detail : "prompt vide ou trop long, ou dose hors de [−1 ; +1]";
+    // HTTPException : detail est une chaîne ; validation FastAPI : une liste {loc, msg}.
+    let why = "paramètre hors bornes (prompt, dose, montée ou demi-vie)";
+    if (typeof detail === "string") {
+      why = detail;
+    } else if (Array.isArray(detail) && detail.length) {
+      why = detail
+        .map((d) => {
+          const loc = Array.isArray(d && d.loc) ? d.loc[d.loc.length - 1] : null;
+          const msg = d && typeof d.msg === "string" ? d.msg : "valeur refusée";
+          return loc ? loc + " : " + msg : msg;
+        })
+        .join(" ; ");
+    }
     return "Paramètres refusés : " + why + ".";
   }
   return "Erreur du serveur (" + code + ").";
@@ -266,6 +278,11 @@ async function init() {
   drawDoseCurve([]);
   try {
     config = await (await fetch("/config")).json();
+    // valeurs par défaut du profil impulsion : celles du serveur (alignées sur la mesure H6)
+    if (typeof config.default_rise === "number") $("rise").value = String(config.default_rise);
+    if (typeof config.default_half_life === "number") {
+      $("half-life").value = String(config.default_half_life);
+    }
     for (const arm of ARMS) {
       if (config.labels && config.labels[arm]) $("title-" + arm).textContent = config.labels[arm];
     }
