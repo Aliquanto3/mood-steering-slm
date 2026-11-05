@@ -45,3 +45,12 @@ Branche à jour d'origin/main (b3bf8ef). Rapport K = 1 de `data/runs/energie-5-3
 - Nit, low, second avis 9 : `--tone-only` lève le plancher QCM sur le 4B. Pas un bug (aucun QCM) ; documenté dans la méthode.
 - Pre-existing, low, revue : reprise d'une unité déjà lue partiellement puis tuée avant `stop()` : la seconde portion n'a pas de lecture (sous-comptage). Même mécanisme qu'au tour 0 depuis A5 ; non corrigé ici.
 - Complexité : 0 constat (lectures `read_jsonl` par tour et bras au seul rapport ; `energy_units.json` réécrit par unité, quelques dizaines de clés).
+
+### Passe 2 (2026-11-05, SHA revu 1d4d438)
+
+Branche à jour d'origin/main. Relu `d4dcb12..1d4d438` ; 519 tests passent, ruff propre.
+
+- Aucun constat Important. Table `_T975` vérifiée valeur par valeur (ddl 1 à 30) ; `student_ci` : n = 2 (t = 12,706, IC large), n = 1 (nan, affiché « IC n/d »), n = 0 (erreur) ; Cornish-Fisher au-delà de 30 (2,0394 à 31, 1,9623 à 1000) exact.
+- Suppression du `.part` : limitée à `_run_rounds` (tours r >= 1, chemin `tone_r{n}`) et seulement si aucune lecture n'existe ; le tour 0 noté et les tours déjà mesurés (`path.exists()` ou lecture présente, donc reprise cumulative) ne sont pas touchés.
+- K = 1 : `repeat_units` vide, aucune clé `energy_repeats`, ordre inchangé. Refus de K pair : seul `--energy-repeats > 1` est visé, le défaut 1 reste valable ; aucune campagne K pair publiée (fonction non fusionnée).
+- Pre-existing/Nit : aucun.
