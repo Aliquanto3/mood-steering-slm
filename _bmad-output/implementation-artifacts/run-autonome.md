@@ -310,3 +310,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:27 · 5.2 · CI · rouge sur les trois OS : borne d'IC à 0,5999999999999999 dans test_model_stats_slopes_and_prompt_gap ; tolérance ajoutée, CI relancée · —
 - 2026-11-05 05:28 · 5.2 · CI · verte · d491333
 - 2026-11-05 05:28 · 5.2 · fusion · #22 fusionnée, MERGED vérifié · 32607c2
+- 2026-11-05 05:56 · 5.1 · dev · fini : H6 non (pulse ≈ neutre sur tous les segments, constant +0,39 à +0,60), GPU, 50 prompts · 501f059
+- 2026-11-05 05:56 · 5.1 · second-avis · lancé (Haiku), priorité : vérifier que la dose du pulse est appliquée · 501f059
+- 2026-11-05 05:56 · 5.4 · dev · lancé (Sonnet, worktree) : paires calme ↔ agitation, calibration 4B, cosinus, scripts/run_axis.py, rapport H5 · —
