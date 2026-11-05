@@ -370,3 +370,7 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 22:26 · A4 · dev · fini : 514 passés ; --energy-repeats, ordre alterné, --tone-only (ajout) · d4dcb12
 - 2026-11-05 22:26 · A4 · second-avis · 0 high, 4 medium (IC bootstrap sous-couvrant sur K tours, tour 0 non comparable, compute_minutes gonflé, tour sans énergie sauté en silence), 5 low · d4dcb12
 - 2026-11-05 22:26 · A4 · review · passe 1 lancée (Opus) ; orientation : IC de Student sur les tours, tour 0 exclu des stats d'énergie (chauffe), nombre pair de tours mesurés · —
+- 2026-11-05 22:34 · A4 · review · passe 1 (Opus) : 4 medium et 4 low corrigés (IC de Student, tour 0 = chauffe, K impair) · 1d4d438
+- 2026-11-05 22:34 · A4 · review · passe 2 (Sonnet) : 0 constat · cf01767
+- 2026-11-05 22:34 · A4 · CI · verte (6 jobs) · cf01767
+- 2026-11-05 22:34 · A4 · fusion · #31 fusionnée, MERGED vérifié · 5372d6d
