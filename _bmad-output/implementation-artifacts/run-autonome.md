@@ -354,3 +354,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 20:51 · A2 · pilote · lancé (origine seule, n=10, 2048 tokens, GPU RTX 3050) · —
 - 2026-11-05 20:54 · run · fusion · #29 état du run vers main, MERGED vérifié ; branches de stories fusionnées supprimées (accord d'Anaël) · b20a656
 - 2026-11-05 20:54 · A5 · dev · lancé (Sonnet, worktree), cadrage story-a5-mise-en-commun.md · —
+- 2026-11-05 21:00 · A2 · pilote · origine 60 % tronquées [30 ; 90], n=10, 2048 tokens, ~54 s/item : sous 80 %, plafond 2048 retenu · —
+- 2026-11-05 21:00 · A2 · mesure · lancée (4 bras, n=50, 2048 tokens, GPU, ~3 h) · —
