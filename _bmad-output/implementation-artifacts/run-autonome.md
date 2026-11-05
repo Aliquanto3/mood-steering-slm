@@ -374,3 +374,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 22:34 · A4 · review · passe 2 (Sonnet) : 0 constat · cf01767
 - 2026-11-05 22:34 · A4 · CI · verte (6 jobs) · cf01767
 - 2026-11-05 22:34 · A4 · fusion · #31 fusionnée, MERGED vérifié · 5372d6d
+- 2026-11-05 22:35 · A4 · décision · environnement de mesure dans le worktree mss-a4 (venv séparé, pour ne pas toucher au venv torch de A2) : llama-cpp-python 0.3.36 CUDA repris du cache uv (plus de roue cu124 publiée pour 0.3.36, l'index retombe sur une compilation qui échoue), codecarbon ; GPU détecté · —
