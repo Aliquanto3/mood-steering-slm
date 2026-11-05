@@ -26,6 +26,10 @@ eval = [
     "torch>=2.15.0",
     "transformers<5",
 ]
+ablation = [
+    "torch>=2.15.0",
+    "transformers<5",
+]
 
 [build-system]
 requires = ["hatchling>=1.27"]

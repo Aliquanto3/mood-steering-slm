@@ -774,6 +774,10 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+ablation = [
+    { name = "torch" },
+    { name = "transformers" },
+]
 eval = [
     { name = "anthropic" },
     { name = "huggingface-hub" },
@@ -807,11 +811,13 @@ requires-dist = [
     { name = "pyarrow", marker = "extra == 'eval'", specifier = ">=26.0.1" },
     { name = "python-dotenv", marker = "extra == 'eval'", specifier = ">=1.2.4" },
     { name = "sentencepiece", marker = "extra == 'eval'", specifier = ">=0.2.2" },
+    { name = "torch", marker = "extra == 'ablation'", specifier = ">=2.15.0" },
     { name = "torch", marker = "extra == 'eval'", specifier = ">=2.15.0" },
+    { name = "transformers", marker = "extra == 'ablation'", specifier = "<5" },
     { name = "transformers", marker = "extra == 'eval'", specifier = "<5" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]
-provides-extras = ["llama", "eval"]
+provides-extras = ["llama", "eval", "ablation"]
 
 [package.metadata.requires-dev]
 dev = [
