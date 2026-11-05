@@ -298,3 +298,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 05:18 · 5.2 · review · lancée (Opus) · —
 - 2026-11-05 05:19 · 5.3 · review · passe 1 : 3 medium + 4 low corrigés (--short-run refusé avec modèles cœur, rapport H7 seul vers rapport-frugalite.md, latence appariée avec IC, lecture prudente) · a37bc3a
 - 2026-11-05 05:19 · 5.3 · review · passe 2 lancée (Opus) · —
+- 2026-11-05 05:22 · 5.3 · review · passe 2 : 2 medium corrigés (reprise d'une mesure courte ancienne, rapport secondaire protégé) ; passe 3 sautée, correctif de 20 lignes vérifié par l'orchestrateur · f77dade
+- 2026-11-05 05:22 · 5.3 · PR · ouverte · f77dade
