@@ -278,3 +278,4 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 04:59 · 4.3 · dev · lancé (Sonnet, worktree) : docs/demo.md, répétition CPU sur la tour, version 0.1.0, notes de release · —
 - 2026-11-05 05:04 · 4.3 · dev · fini : répétition CPU OK (≈5 tok/s par colonne, 1er token 1,3–1,7 s, pôle négatif OK, boucle attendue à −1), docs/demo.md, v0.1.0, notes de release · da2762b
 - 2026-11-05 05:04 · 4.3 · second-avis · lancé (Haiku) · da2762b
+- 2026-11-05 05:04 · 5.3 · dev · branchement --energy dans run_bench lancé (Sonnet, worktree), mesure courte 0.8B CPU · —
