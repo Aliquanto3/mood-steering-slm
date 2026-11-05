@@ -506,3 +506,20 @@ def test_analyse_controles_effet_sans_prompt_et_decroissance():
     rows["decay"] = [row("decay", f"p{i}", [32] * 6) for i in range(4)]
     s = rp.analyse(rows, FakeScorer(), n_boot=50, seed=0)
     assert s["h6"]["effet_sans_prompt"] is True and s["h6"]["decroissance_seule"] is False
+
+
+def test_device_par_sortie_et_par_bras(tmp_path):
+    steerer, _ = make_steerer()
+    assert rp.run_campaign(steerer, prompts(1), tmp_path, device="CPU")
+    rows = rp.read_all(tmp_path)
+    assert all(r["device"] == "CPU" for rs in rows.values() for r in rs)
+    assert rp.describe_devices(rows, "GPU") == "CPU"
+    old = {"neutral": [{"item_id": "p0"}], "decay": [{"item_id": "p0", "device": "CPU"}]}
+    assert rp.describe_devices(old, "GPU") == "neutral : GPU (1) ; decay : CPU (1)"
+
+
+def test_is_complete_sur_un_sous_ensemble(tmp_path):
+    steerer, _ = make_steerer()
+    cfg = rp.Config(n_prompts=3)
+    assert rp.run_campaign(steerer, rp.items_for(cfg)[:2], tmp_path)
+    assert rp.is_complete(tmp_path, cfg, subset=2) and not rp.is_complete(tmp_path, cfg)

@@ -124,7 +124,12 @@ def arm_schedule(arm: str) -> DoseSchedule:
 
 
 def generate_row(
-    steerer: Steerer, arm: str, item: rb.Item, seed: int, max_tokens: int
+    steerer: Steerer,
+    arm: str,
+    item: rb.Item,
+    seed: int,
+    max_tokens: int,
+    device: str | None = None,
 ) -> dict[str, Any]:
     """Une sortie : fragments, indice du token de chaque fragment, dose de chaque token."""
     t0 = time.perf_counter()
@@ -157,6 +162,7 @@ def generate_row(
         "output": "".join(pieces),
         "fallback": stream.fallback,
         "latency_s": time.perf_counter() - t0,
+        **({"device": device} if device is not None else {}),
     }
 
 
@@ -177,6 +183,7 @@ def run_campaign(
     max_tokens: int = MAX_TOKENS,
     deadline: float | None = None,
     arms: Sequence[str] = ARMS,
+    device: str | None = None,
 ) -> bool:
     """Génère les bras prompt par prompt ; rend ``True`` si tout est fait.
 
@@ -199,7 +206,7 @@ def run_campaign(
                 continue
             if deadline is not None and time.monotonic() > deadline:
                 return False
-            row = generate_row(steerer, arm, item, seed, max_tokens)
+            row = generate_row(steerer, arm, item, seed, max_tokens, device)
             with arm_file(out, arm).open("a", encoding="utf-8", newline="\n") as fh:
                 fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             done[arm].add(item.id)
@@ -588,9 +595,26 @@ def read_all(out: Path) -> dict[str, list[dict[str, Any]]]:
     return {arm: load_rows(arm_file(out, arm)) for arm in ARMS}
 
 
-def is_complete(out: Path, cfg: Config) -> bool:
-    ids = {it.id for it, _ in items_for(cfg)}
+def is_complete(out: Path, cfg: Config, subset: int | None = None) -> bool:
+    ids = {it.id for it, _ in items_for(cfg)[:subset]}
     return all({r["item_id"] for r in rows} >= ids for rows in read_all(out).values())
+
+
+def describe_devices(rows_by_arm: Mapping[str, Sequence[Mapping[str, Any]]], default: str) -> str:
+    """Device des sorties ; par bras (avec effectifs) si une reprise en a changé en route."""
+    per_arm: dict[str, dict[str, int]] = {}
+    for arm, rows in rows_by_arm.items():
+        counts = per_arm.setdefault(arm, {})
+        for r in rows:
+            d = r.get("device", default)
+            counts[d] = counts.get(d, 0) + 1
+    seen = {d for counts in per_arm.values() for d in counts}
+    if len(seen) <= 1:
+        return next(iter(seen), default)
+    return " ; ".join(
+        f"{arm} : " + " + ".join(f"{d} ({n})" for d, n in counts.items())
+        for arm, counts in per_arm.items()
+    )
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -604,6 +628,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--n-gpu-layers", type=int, default=0, help="-1 = tout sur le GPU (roue CUDA)")
     p.add_argument("--threads", type=int, default=None)
     p.add_argument("--cuda-dll-dir", type=Path, default=None, help="DLL CUDA (cudart, cublas)")
+    p.add_argument(
+        "--subset",
+        type=int,
+        default=None,
+        help="ne générer que les N premiers prompts (hors manifeste ; analyse appariée)",
+    )
     p.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     p.add_argument("--no-report", action="store_true", help="générer sans noter ni rédiger")
     return p.parse_args(argv)
@@ -625,7 +655,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     runtime_file = args.out / "runtime.json"
     if runtime_file.exists():
         runtime.update(json.loads(runtime_file.read_text(encoding="utf-8")))
-    if not is_complete(args.out, cfg):
+    # device des sorties déjà écrites sans champ ``device`` : celui du premier lancement
+    runtime.setdefault("first_device", runtime["device"])
+    if not is_complete(args.out, cfg, args.subset):
         import llama_cpp
 
         from mood_steering.calibration import load_vector
@@ -633,10 +665,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         if args.n_gpu_layers and not llama_cpp.llama_supports_gpu_offload():
             raise RuntimeError("--n-gpu-layers demandé mais roue llama-cpp-python sans GPU")
-        runtime.update(
-            device="GPU (toutes les couches)" if args.n_gpu_layers else "CPU",
-            llama_cpp=llama_cpp.__version__,
-        )
+        device = "GPU (toutes les couches)" if args.n_gpu_layers else "CPU"
+        if runtime["first_device"] == "inconnu":
+            runtime["first_device"] = device
+        runtime.update(device=device, llama_cpp=llama_cpp.__version__)
         runtime_file.write_text(json.dumps(runtime), encoding="utf-8")
         backend = LlamaCppBackend(
             str(args.models_dir / f"{spec.model_id}.gguf"),
@@ -653,7 +685,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         deadline = None if args.max_minutes is None else time.monotonic() + args.max_minutes * 60
         if not run_campaign(
-            steerer, items_for(cfg), args.out, max_tokens=cfg.max_tokens, deadline=deadline
+            steerer,
+            items_for(cfg)[: args.subset],
+            args.out,
+            max_tokens=cfg.max_tokens,
+            deadline=deadline,
+            device=device,
         ):
             print("campagne incomplète : relancer avec --resume")
             return EXIT_INCOMPLETE
@@ -661,7 +698,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     from mood_steering.eval.tone import ToneScorer
 
-    summary = analyse(read_all(args.out), ToneScorer.from_huggingface())
+    rows_by_arm = read_all(args.out)
+    runtime["device"] = describe_devices(rows_by_arm, runtime["first_device"])
+    summary = analyse(rows_by_arm, ToneScorer.from_huggingface())
     (args.out / "summary.json").write_text(
         json.dumps(summary, default=lambda o: o.__dict__, indent=1), encoding="utf-8"
     )
