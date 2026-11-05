@@ -265,3 +265,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 04:37 · 3.5 · second-avis · lancé (Haiku) · a621925
 - 2026-11-05 04:37 · 6.2 · dev · mesure complète lancée (Sonnet, worktree, GPU) · —
 - 2026-11-05 04:37 · décision · vecteurs régénérés par 3.5 copiés dans data/moods/ du dépôt principal (cos 0,993–0,996) · —
+- 2026-11-05 04:41 · 3.5 · second-avis · 0 high, 4 medium (juge 56/200 invalides, dénominateur complaisance, surinterprétation H2, splitlines U+2028), 4 low · a621925
+- 2026-11-05 04:41 · 3.5 · review · lancée (Opus), rejugement autorisé si estimation ≤ 0,55 $ (plafond juge 1 $) · —
