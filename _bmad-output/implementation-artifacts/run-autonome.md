@@ -188,3 +188,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 01:32 · 4.1 · dev · lancé (dev-story Sonnet, worktree, sans cadrage BMAD ; ajoute Steerer.stream) · —
 - 2026-11-05 01:34 · 4.1 · dev · fini, 11 tests (254 au total) ; Steerer.open_stream / stream ajoutés ; fastapi, uvicorn en base · 2e2334c
 - 2026-11-05 01:34 · 4.1 · second-avis · lancé · —
+- 2026-11-05 01:36 · 4.1 · second-avis · 1 high (Steerer partagés entre requêtes, reset au milieu d'une génération), 3 medium, 4 low · —
+- 2026-11-05 01:36 · 4.1 · décision · une seule génération active (409 sinon), annulation coopérative à la déconnexion, max_tokens ≤ 512, prompt ≤ 2000 caractères · —
+- 2026-11-05 01:36 · 4.1 · review · passe 1 lancée · —
