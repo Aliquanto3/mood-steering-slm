@@ -64,7 +64,7 @@ from mood_steering.eval.report import (  # noqa: E402
 )
 from mood_steering.eval.resumable import dump_row, read_rows  # noqa: E402
 from mood_steering.eval.runner import NEUTRAL_INSTRUCTION, Item, item_seed, system_for  # noqa: E402
-from mood_steering.eval.stats import bootstrap_ci  # noqa: E402
+from mood_steering.eval.stats import bootstrap_ci, student_ci  # noqa: E402
 from mood_steering.eval.sycophancy import (  # noqa: E402
     CHALLENGE_FIXED,
     CHALLENGE_SELECTED,
@@ -89,8 +89,13 @@ DEFAULT_SECONDARY_REPORT = Path("docs") / "rapport-modeles-secondaires.md"
 DEFAULT_FRUGALITY_REPORT = Path("docs") / "rapport-frugalite.md"
 ENERGY_UNITS_FILE = "energy_units.json"
 # Ordre des bras par tour de mesure d'énergie (``--energy-repeats``) : le tour 0 est la
-# génération notée ; les tours pairs suivent l'ordre des bras, les tours impairs l'ordre inverse.
-ENERGY_ROUND_ORDER = "pairs : ordre des bras ; impairs : ordre inverse (tour 0 = sorties notées)"
+# génération notée et la chauffe, hors statistiques d'énergie ; à partir du tour 1, tours
+# impairs dans l'ordre des bras, tours pairs dans l'ordre inverse (K - 1 pair : position
+# moyenne de chaque bras équilibrée).
+ENERGY_ROUND_ORDER = (
+    "tour 0 = sorties notées et chauffe (hors statistiques) ; tours impairs : ordre des bras ; "
+    "tours pairs (>= 2) : ordre inverse"
+)
 LECTURE_START = "<!-- lecture -->"
 LECTURE_END = "<!-- /lecture -->"
 
@@ -409,7 +414,9 @@ def load_energy_units(out: Path) -> dict[str, dict[str, float]]:
 def save_energy_units(out: Path, units: Mapping[str, Any]) -> None:
     path = Path(out) / ENERGY_UNITS_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(units, indent=1, sort_keys=True), "utf-8", newline="\n")
+    part = path.with_name(path.name + ".part")  # écriture atomique : jamais de JSON tronqué
+    part.write_text(json.dumps(units, indent=1, sort_keys=True), "utf-8", newline="\n")
+    os.replace(part, path)
 
 
 def round_key(model_id: str, arm: str, rnd: int) -> str:
@@ -426,8 +433,9 @@ def round_path(out: Path, model_id: str, arm: str, rnd: int) -> Path:
 
 
 def round_order(arms: Sequence[Arm], rnd: int) -> list[Arm]:
-    """Règle d'alternance : tour pair dans l'ordre des bras, tour impair dans l'ordre inverse."""
-    return list(arms) if rnd % 2 == 0 else list(reversed(arms))
+    """Règle d'alternance (``ENERGY_ROUND_ORDER``) : tour 0 et tours impairs dans l'ordre des
+    bras, tours pairs >= 2 dans l'ordre inverse."""
+    return list(arms) if rnd == 0 or rnd % 2 == 1 else list(reversed(arms))
 
 
 def repeat_units(
@@ -605,8 +613,13 @@ def _run_rounds(
             continue
         t0 = time.monotonic()
         key = round_key(spec.model_id, arm.name, rnd)
-        # tour commencé sans lecture : énergie partielle, non publiée (comme le tour 0)
-        tracked = key in energy_units or not path.with_name(path.name + ".part").exists()
+        part = path.with_name(path.name + ".part")
+        if key not in energy_units and part.exists():
+            # tour commencé sans lecture (arrêt brutal avant ``stop()``) : non noté, on le
+            # remesure en entier plutôt que de publier un tour sans énergie
+            log(f"{key} : tour commencé sans lecture d'énergie, remesuré depuis le début")
+            part.unlink()
+        tracked = True
         complete = _measured(
             energy_tracker,
             energy_units,
@@ -1034,8 +1047,9 @@ def repeated_energy(
 ) -> dict[int, dict[str, tuple[Mapping[str, float], int]]]:
     """Lectures par tour (``--energy-repeats``) : ``{tour: {bras: (lecture, n générations)}}``.
 
-    Vide pour une campagne à K = 1 (aucune clé ``tone#r*``). Un tour sans lecture ou sans
-    JSONL fini n'y figure pas.
+    Tours mesurés seulement (r >= 1) : le tour 0, chauffe et sorties notées, n'entre pas dans
+    les statistiques. Vide pour une campagne à K = 1 (aucune clé ``tone#r*``). Un tour sans
+    lecture ou sans JSONL fini n'y figure pas (``repeated_section`` le signale).
     """
     result: dict[int, dict[str, tuple[Mapping[str, float], int]]] = {}
     top = 0
@@ -1044,7 +1058,7 @@ def repeated_energy(
             top = max(top, int(k.split("/")[1].removeprefix(f"{PHASE_TONE}#r")))
     if top == 0:
         return {}
-    for rnd in range(top + 1):
+    for rnd in range(1, top + 1):
         for arm in spec.arms():
             path = round_path(out, spec.model_id, arm.name, rnd)
             u = units.get(round_key(spec.model_id, arm.name, rnd))
@@ -1058,13 +1072,23 @@ def repeated_section(
     spec: ModelSpec,
     repeated: Mapping[int, Mapping[str, tuple[Mapping[str, float], int]]],
 ) -> str:
-    """Énergie et CO2 par génération sur K tours (moyenne, IC95 bootstrap) et ratio apparié."""
+    """Énergie et CO2 par génération sur les tours 1..K-1 (moyenne, IC95 de Student) et ratio
+    apparié par tour ; les couples (tour, bras) sans lecture sont signalés."""
     arms = spec.arms()
     rounds = sorted(repeated)
+    manifest_path = Path(out) / "manifest.json"
+    k = 0
+    if manifest_path.exists():
+        k = int(json.loads(manifest_path.read_text(encoding="utf-8")).get("energy_repeats", 0))
+    k = max(k, rounds[-1] + 1)
+    missing = [
+        f"tour {r} {a.name}" for r in range(1, k) for a in arms if a.name not in repeated.get(r, {})
+    ]
     lines = [
         "",
-        f"Énergie et CO2 par génération sur {len(rounds)} tour(s) de mesure "
-        "(moyenne, IC95 bootstrap sur les tours ; le tableau ci-dessus ne garde que le tour 0) :",
+        f"Énergie et CO2 par génération sur {len(rounds)} tour(s) de mesure (tours 1 à {k - 1}"
+        " ; moyenne et IC95 de Student, t à n - 1 ddl, sur les tours ; le tour 0, chauffe et "
+        "sorties notées, n'y entre pas et reste seul dans le tableau ci-dessus) :",
         "",
         "| Bras | Tours | Énergie/gén. (kWh) | CO2/gén. (kg) |",
         "|---|---|---|---|",
@@ -1082,12 +1106,9 @@ def repeated_section(
         by_round = per_gen.get(arm.name)
         if not by_round:
             continue
-        e = bootstrap_ci([v[0] for v in by_round.values()])
-        c = bootstrap_ci([v[1] for v in by_round.values()])
-        lines.append(
-            f"| {arm.name} | {len(by_round)} | {e.mean:.4g} [{e.low:.4g} ; {e.high:.4g}] "
-            f"| {c.mean:.4g} [{c.low:.4g} ; {c.high:.4g}] |"
-        )
+        e = student_ci([v[0] for v in by_round.values()])
+        c = student_ci([v[1] for v in by_round.values()])
+        lines.append(f"| {arm.name} | {len(by_round)} | {_civ(e)} | {_civ(c)} |")
     ref = next((a for a in arms if a.kind == KIND_PROMPT), None)
     ratio_lines: list[str] = []
     if ref is not None and ref.name in per_gen:
@@ -1103,17 +1124,14 @@ def repeated_section(
             ]  # fmt: skip
             if not ratios:
                 continue
-            e = bootstrap_ci([x[0] for x in ratios])
-            c = bootstrap_ci([x[1] for x in ratios])
-            ratio_lines.append(
-                f"| {arm.name} | {len(ratios)} | x{e.mean:.4g} [{e.low:.4g} ; {e.high:.4g}] "
-                f"| x{c.mean:.4g} [{c.low:.4g} ; {c.high:.4g}] |"
-            )
+            e = student_ci([x[0] for x in ratios])
+            c = student_ci([x[1] for x in ratios])
+            ratio_lines.append(f"| {arm.name} | {len(ratios)} | x{_civ(e)} | x{_civ(c)} |")
     if ratio_lines and ref is not None:
         lines += [
             "",
             f"Ratio apparié par tour face à `{ref.name}` (chaque tour compare les bras mesurés "
-            "dans le même tour ; moyenne et IC95 bootstrap des ratios) :",
+            "dans le même tour ; moyenne et IC95 de Student des ratios) :",
             "",
             "| Bras | Tours | Énergie/gén. | CO2/gén. |",
             "|---|---|---|---|",
@@ -1122,14 +1140,31 @@ def repeated_section(
     lines += [
         "",
         f"Ordre des bras alterné d'un tour à l'autre ({ENERGY_ROUND_ORDER}) ; seul le tour 0 "
-        "est noté, les autres ne servent qu'à l'énergie. Avec peu de tours, l'IC bootstrap est "
-        "grossier. Pas de verdict H7 : les seuils des hypothèses bonus ne sont pas "
-        "pré-enregistrés (action A6), ce rapport donne les mesures et leurs intervalles.",
+        "est noté, les autres ne servent qu'à l'énergie. Pas de verdict H7 : les seuils des "
+        "hypothèses bonus ne sont pas pré-enregistrés (action A6), ce rapport donne les "
+        "mesures et leurs intervalles.",
     ]
+    if missing:
+        lines.append(
+            "Tours sans lecture d'énergie (hors statistiques, à remesurer avec --resume) : "
+            + ", ".join(missing)
+            + "."
+        )
+    if (k - 1) % 2:
+        lines.append(
+            f"Nombre de tours mesurés impair ({k - 1}) : position moyenne des bras déséquilibrée."
+        )
     loads = _first_load(out)
     if loads is not None:
         lines.append(f"Relevé de charge au lancement : {loads}.")
     return "\n".join(lines) + "\n"
+
+
+def _civ(iv: Any) -> str:
+    """Moyenne [IC95] ; « IC n/d » avec une seule valeur."""
+    if math.isnan(iv.low):
+        return f"{iv.mean:.4g} [IC n/d]"
+    return f"{iv.mean:.4g} [{iv.low:.4g} ; {iv.high:.4g}]"
 
 
 def _first_load(out: Path) -> str | None:
@@ -1232,6 +1267,8 @@ def preserved_lecture(path: Path) -> str | None:
 def compute_minutes(out: Path, spec: ModelSpec) -> float:
     total = 0.0
     for p in (Path(out) / spec.model_id).glob("*/*.jsonl"):
+        if p.parent.name.startswith(f"{PHASE_TONE}_r"):  # tours d'énergie : hors protocole
+            continue
         total += sum(r.get("latency_s", 0.0) for r in read_jsonl(p))
     return total / 60
 
@@ -1558,6 +1595,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         p.error("--energy-repeats doit être >= 1")
     if args.energy_repeats > 1 and not args.energy:
         p.error("--energy-repeats demande --energy")
+    if args.energy_repeats > 1 and args.energy_repeats % 2 == 0:
+        p.error(
+            "--energy-repeats impair (tour 0 de chauffe + un nombre pair de tours mesurés, "
+            "pour équilibrer l'ordre des bras), par ex. 7"
+        )
+    if args.tone_only and args.report is None:
+        args.report = args.out / "frugalite.md"  # ne réécrit pas les rapports de docs/
+    if args.tone_only and args.report.resolve() == DEFAULT_REPORT.resolve():
+        p.error(f"--tone-only : --report ne peut pas être {DEFAULT_REPORT}")
     if args.tone_only and not args.energy:
         p.error("--tone-only demande --energy (rien d'autre à mesurer)")
     if args.max_judge_cost is not None and not 0 < args.max_judge_cost <= 1.0:

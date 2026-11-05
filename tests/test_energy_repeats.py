@@ -67,18 +67,18 @@ def test_repeats_alternate_arm_order_and_keep_single_scored_pass(tmp_path):
     units = rb.load_energy_units(tmp_path)
     assert set(units) == {rb.round_key(spec.model_id, n, r) for n in names for r in range(3)}
     assert tracker.starts == tracker.stops == 9
-    # ordre de mesure : tour 0 dans l'ordre des bras, tour 1 inversé, tour 2 dans l'ordre
+    # ordre de mesure : tour 0 (chauffe) et tour 1 dans l'ordre des bras, tour 2 inversé
     seen = []
     for m in logs:
         hit = re.match(r"Tiny-3 tone (?:tour (\d+) )?(\S+) : ", m)
         assert hit, m
         seen.append((int(hit.group(1) or 0), hit.group(2)))
     assert seen == (
-        [(0, n) for n in names] + [(1, n) for n in reversed(names)] + [(2, n) for n in names]
+        [(0, n) for n in names] + [(1, n) for n in names] + [(2, n) for n in reversed(names)]
     )
-    # la k-ième lecture vaut k x 0.001 : le bras steering est lu en 3e, 4e puis 9e
+    # la k-ième lecture vaut k x 0.001 : le bras steering est lu en 3e, 6e puis 7e
     steer = names[2]
-    for rnd, kwh in ((0, 0.003), (1, 0.004), (2, 0.009)):
+    for rnd, kwh in ((0, 0.003), (1, 0.006), (2, 0.007)):
         got = units[rb.round_key(spec.model_id, steer, rnd)]["energy_kwh"]
         assert got == pytest.approx(kwh)
     # sorties notées : un seul passage (tour 0) dans tone/ ; les tours suivants à part
@@ -107,17 +107,18 @@ def test_repeats_resume_in_the_middle_of_round_two(tmp_path):
     spec = three_arm_spec()
     names = [a.name for a in spec.arms()]
     tracker = ScriptedTracker()
-    # tours 0 et 1 : 60 appels ; tour 2 : bras 0 complet (70), échec au 5e item du bras 1 (4 faits)
+    # tours 0 et 1 : 60 appels ; tour 2 (inversé) : bras 2 complet (70), échec au 5e item du
+    # bras 1 (4 faits)
     with pytest.raises(RuntimeError, match="arrêt simulé"):
         campaign(tmp_path, spec, CountingBackend(fail_at=75), tracker, repeats=3)
     before = rb.load_energy_units(tmp_path)
-    assert len(before) == 3 + 3 + 2  # tours 0 et 1 finis ; tour 2 : bras 0 fini, bras 1 partiel
+    assert len(before) == 3 + 3 + 2  # tours 0 et 1 finis ; tour 2 : bras 2 fini, bras 1 partiel
     k1 = rb.round_key(spec.model_id, names[1], 2)
-    assert rb.round_path(tmp_path, spec.model_id, names[0], 2).exists()
+    assert rb.round_path(tmp_path, spec.model_id, names[2], 2).exists()
     assert not rb.round_path(tmp_path, spec.model_id, names[1], 2).exists()
     backend = CountingBackend()
     assert campaign(tmp_path, spec, backend, tracker, repeats=3)
-    assert len(backend.calls) == 16  # 6 items restants du bras 1 (4 faits) + 10 du bras 2
+    assert len(backend.calls) == 16  # 6 items restants du bras 1 (4 faits) + 10 du bras 0
     after = rb.load_energy_units(tmp_path)
     assert len(after) == 9
     for r in range(2):  # lectures des tours finis conservées à l'identique
@@ -162,11 +163,13 @@ def test_h7_repeated_gives_means_ci_and_paired_ratio_without_verdict(tmp_path):
     load = {"gpu": {"utilization_pct": 3, "memory_used_mib": 900}, "cpu_percent": 7.0}
     (tmp_path / "runs.jsonl").write_text(json.dumps({"load": load}) + "\n", "utf-8")
     text = rb.h7_section(tmp_path, [spec], proto())
-    assert "sur 3 tour(s) de mesure" in text
-    # joyeux : lectures 2, 5 et 8 (x 0.001 kWh pour 10 générations) -> moyenne 5e-4
-    assert "| prompt_joyful | 3 | 0.0005 [" in text
-    # ratio apparié par tour steering / joyeux : 3/2, 4/5, 9/8 -> moyenne 1.142
-    assert f"| {names[2]} | 3 | x1.142 [" in text
+    # tour 0 (chauffe) hors statistiques : tours 1 et 2 seulement
+    assert "sur 2 tour(s) de mesure (tours 1 à 2" in text and "Student" in text
+    # joyeux : lectures 5 et 8 (x 0.001 kWh pour 10 générations) -> 6.5e-4 ; IC de Student à
+    # 1 ddl : 6.5e-4 -/+ 12.706 x sd / sqrt(2), sd = 2.1213e-4 -> [-1.256e-3 ; 2.556e-3]
+    assert "| prompt_joyful | 2 | 0.00065 [-0.001256 ; 0.002556] |" in text
+    # ratio apparié par tour steering / joyeux : 6/5 et 7/8 -> moyenne 1.0375
+    assert f"| {names[2]} | 2 | x1.038 [" in text
     assert "Ratio apparié par tour face à `prompt_joyful`" in text
     assert "Pas de verdict H7" in text and "A6" in text
     assert "Relevé de charge au lancement : GPU 3 % (900 MiB), CPU 7 %." in text
@@ -252,3 +255,70 @@ def test_system_load_degrades_without_nvidia_smi_or_on_garbage():
         system_load(run=lambda c, **k: Done("N/A, N/A\n"), cpu_percent=lambda: 2.0)["gpu"] is None
     )
     assert system_load(run=lambda c, **k: Done(""), cpu_percent=lambda: 2.0)["gpu"] is None
+
+
+def test_student_ci_for_few_rounds():
+    from mood_steering.eval.stats import student_ci
+
+    iv = student_ci([1.0, 2.0, 3.0])  # sd 1, t(2 ddl) = 4.303 -> demi-largeur 2.4843
+    assert iv.mean == pytest.approx(2.0)
+    assert (iv.low, iv.high) == pytest.approx((-0.4843, 4.4843), abs=1e-4)
+    single = student_ci([0.5])
+    assert single.mean == 0.5 and single.low != single.low  # nan : pas d'IC sur une valeur
+
+
+def test_round_started_without_reading_is_remeasured_and_missing_reading_reported(tmp_path):
+    spec = three_arm_spec()
+    names = [a.name for a in spec.arms()]
+    assert campaign(tmp_path, spec, tracker=ScriptedTracker(), repeats=3)
+    # arrêt brutal simulé au tour 2 : JSONL partiel sans lecture
+    path = rb.round_path(tmp_path, spec.model_id, names[0], 2)
+    rows = path.read_text("utf-8").splitlines(keepends=True)
+    path.unlink()
+    path.with_name(path.name + ".part").write_text("".join(rows[:3]), "utf-8")
+    units = rb.load_energy_units(tmp_path)
+    key = rb.round_key(spec.model_id, names[0], 2)
+    del units[key]
+    rb.save_energy_units(tmp_path, units)
+    assert not (tmp_path / (rb.ENERGY_UNITS_FILE + ".part")).exists()  # écriture atomique
+    backend, logs = CountingBackend(), []
+    assert campaign(tmp_path, spec, backend, ScriptedTracker(), repeats=3, log=logs.append)
+    assert len(backend.calls) == 10  # tour remesuré en entier
+    assert key in rb.load_energy_units(tmp_path)
+    assert any("remesuré" in m for m in logs)
+    # tour publié sans lecture (traqueur en échec) : signalé dans le rapport
+    units = rb.load_energy_units(tmp_path)
+    del units[rb.round_key(spec.model_id, names[1], 1)]
+    rb.save_energy_units(tmp_path, units)
+    text = rb.h7_section(tmp_path, [spec], proto())
+    assert (
+        "Tours sans lecture d'énergie (hors statistiques, à remesurer avec --resume) : "
+        f"tour 1 {names[1]}." in text
+    )
+
+
+def test_compute_minutes_ignores_energy_rounds(tmp_path):
+    spec = three_arm_spec()
+    campaign(tmp_path, spec, tracker=FakeTracker())
+    base = rb.compute_minutes(tmp_path, spec)
+    extra = tmp_path / spec.model_id / "tone_r1" / "neutral.jsonl"
+    extra.parent.mkdir()
+    extra.write_text(json.dumps({"latency_s": 6000.0}) + "\n", "utf-8")
+    assert rb.compute_minutes(tmp_path, spec) == base
+
+
+def test_cli_even_repeats_refused_and_tone_only_report_kept_out_of_docs(tmp_path):
+    with pytest.raises(SystemExit):
+        rb.parse_args(["--energy", "--energy-repeats", "4"])
+    ok = ["--energy", "--tone-only", "--models", "4b", "--out", str(tmp_path)]
+    assert rb.parse_args(ok).report == tmp_path / "frugalite.md"
+    with pytest.raises(SystemExit):
+        rb.parse_args([*ok, "--report", str(rb.DEFAULT_REPORT)])
+
+
+def test_system_load_never_raises_on_cpu_error():
+    def denied():
+        raise PermissionError("accès refusé")
+
+    got = system_load(run=lambda c, **k: Done(""), cpu_percent=denied)
+    assert got == {"gpu": None, "cpu_percent": None}

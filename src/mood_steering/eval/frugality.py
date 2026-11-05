@@ -137,7 +137,7 @@ def system_load(
                 return float(psutil.cpu_percent(interval=1.0))
 
         cpu = float(cpu_percent())
-    except ImportError:
+    except Exception:  # pas de psutil, accès refusé (OSError)… : jamais bloquant
         cpu = None
     return {"gpu": gpu, "cpu_percent": cpu}
 

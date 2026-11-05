@@ -127,3 +127,38 @@ def aggregate(
         arm: bootstrap_ci(list(scores), n_boot=n_boot, seed=seed)
         for arm, scores in scores_by_arm.items()
     }
+
+
+# Quantiles t de Student à 97,5 % (IC95 bilatéral), ddl 1 à 30.
+_T975 = (
+    12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+    2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
+    2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042,
+)  # fmt: skip
+
+
+def t_quantile_975(df: int) -> float:
+    """Quantile 97,5 % de la loi de Student à ``df`` ddl (table, Cornish-Fisher au-delà de 30)."""
+    if df < 1:
+        raise ValueError("ddl >= 1")
+    if df <= len(_T975):
+        return _T975[df - 1]
+    z = 1.959964
+    return z + (z**3 + z) / (4 * df) + (5 * z**5 + 16 * z**3 + 3 * z) / (96 * df**2)
+
+
+def student_ci(values: Sequence[float]) -> Interval:
+    """Moyenne et IC95 de Student (t à n - 1 ddl) : pour quelques répétitions (n petit).
+
+    Le bootstrap percentile sous-couvre sur n < 10 ; ici ``low`` et ``high`` valent nan si
+    n < 2 (pas d'intervalle sur une seule valeur).
+    """
+    if not values:
+        raise ValueError("aucune valeur à agréger")
+    n = len(values)
+    mean = sum(values) / n
+    if n < 2:
+        return Interval(mean, math.nan, math.nan, n)
+    sd = math.sqrt(sum((x - mean) ** 2 for x in values) / (n - 1))
+    half = t_quantile_975(n - 1) * sd / math.sqrt(n)
+    return Interval(mean, mean - half, mean + half, n)
