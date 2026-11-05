@@ -36,7 +36,13 @@ from run_bench import (  # noqa: E402  (import en lecture seule)
 )
 
 from mood_steering.eval.arms import KIND_NEUTRAL, KIND_PROMPT, KIND_STEERING  # noqa: E402
-from mood_steering.eval.stats import Interval, bootstrap_ci  # noqa: E402
+from mood_steering.eval.stats import (  # noqa: E402
+    Interval,
+    bootstrap_ci,
+    excludes_zero,
+    interval_from_draws,
+    paired_shift,
+)
 
 DEFAULT_OUT = Path("data") / "runs" / "campagne-3-5"
 DEFAULT_REPORT = Path("docs") / "rapport-taille.md"
@@ -162,14 +168,14 @@ class ArmRow:
 
 
 def shifted_arm(arm: ArmData, neutral: ArmData, *, n_boot: int, seed: int) -> bool:
-    """Ton déplacé dans le sens de la dose : deux IC95 bootstrap calculés séparément, disjoints.
+    """Ton déplacé dans le sens de la dose : critère unique de ``eval.stats.paired_shift``.
 
-    Critère conservateur : ce n'est pas un test de l'écart apparié bras - neutre.
+    IC95 du bootstrap apparié de la différence de ton (bras - neutre, mêmes prompts) qui exclut
+    0 du côté du signe de la dose.
     """
-    ci, ci0 = (bootstrap_ci(list(x.tones), n_boot=n_boot, seed=seed) for x in (arm, neutral))
-    if arm.dose > 0:
-        return ci.low > ci0.high
-    return ci.high < ci0.low
+    return paired_shift(
+        arm.tones, neutral.tones, direction=1 if arm.dose > 0 else -1, n_boot=n_boot, seed=seed
+    )
 
 
 def useful_arm(
@@ -180,7 +186,7 @@ def useful_arm(
     seed: int,
     max_degenerate: float = MAX_DEGENERATE,
 ) -> bool:
-    """Utile : ton déplacé dans le sens de la dose (IC95 disjoint du neutre), peu de dégénérées."""
+    """Utile : ton déplacé dans le sens de la dose (IC95 apparié excluant 0), peu de dégénérées."""
     shifted = shifted_arm(arm, neutral, n_boot=n_boot, seed=seed)
     return shifted and rate(arm.degenerate) <= max_degenerate
 
@@ -253,21 +259,6 @@ def prompt_gap(data: ModelData, *, n_boot: int = N_BOOT, seed: int = 0) -> str:
 # --- bootstrap sur les items -------------------------------------------------------------------
 
 Stat = Callable[[ModelData, Sequence[int]], float]
-
-
-def _pct(sorted_values: Sequence[float], q: float) -> float:
-    pos = q * (len(sorted_values) - 1)
-    lo = int(pos)
-    hi = min(lo + 1, len(sorted_values) - 1)
-    return sorted_values[lo] + (sorted_values[hi] - sorted_values[lo]) * (pos - lo)
-
-
-def interval(values: Sequence[float], point: float) -> Interval:
-    """IC95 percentile des tirages valides (nan écartés) autour d'une estimation ponctuelle."""
-    v = sorted(x for x in values if not math.isnan(x))
-    if not v:
-        return Interval(point, math.nan, math.nan, 0)
-    return Interval(point, _pct(v, 0.025), _pct(v, 0.975), len(v))
 
 
 def boot_stat(data: ModelData, stat: Stat, *, n_boot: int, seed: int) -> list[float]:
@@ -356,7 +347,7 @@ def model_stats(data: ModelData, *, n_boot: int = N_BOOT, seed: int = 0) -> Mode
     slopes = {}
     for name, stat in COMPARED[:3]:
         draws = boot_stat(data, stat, n_boot=n_boot, seed=seed)
-        slopes[name] = interval(draws, stat(data, list(n)))
+        slopes[name] = interval_from_draws(draws, stat(data, list(n)))
     return ModelStats(
         data,
         rows,
@@ -386,8 +377,8 @@ def compare(a: ModelStats, b: ModelStats) -> list[Comparison]:
             b.data, list(range(len(b.data.ids)))
         )
         diffs = paired_diff_draws(a.data, b.data, stat, n_boot=a.n_boot, seed=a.seed)
-        iv = interval(diffs, point)
-        decided = not math.isnan(iv.low) and (iv.low > 0 or iv.high < 0)
+        iv = interval_from_draws(diffs, point)
+        decided = excludes_zero(iv)
         out.append(Comparison(name, a.data.spec.model_id, b.data.spec.model_id, iv, decided))
     return out
 

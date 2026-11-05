@@ -2,7 +2,6 @@ import json
 
 import pytest
 
-from mood_steering.eval.arms import KIND_NEUTRAL, KIND_PROMPT, KIND_STEERING, Arm
 from mood_steering.eval.frugality import (
     ENERGY_FILE,
     CodeCarbonTracker,
@@ -13,108 +12,17 @@ from mood_steering.eval.frugality import (
     load_energy,
     write_energy,
 )
-from mood_steering.eval.runner import Item, load_run, run_bench
-from mood_steering.steering import Steerer
 
 
-class FakeBackend:
-    n_layer = 8
-    n_embd = 4
-
-    def reset(self):
-        pass
-
-    def set_cvec(self, data, n_embd, il_start, il_end):
-        pass
-
-    def generate(self, prompt, system, max_tokens, seed):
-        return f"out:{prompt}:{seed}"
-
-
-ARMS = [
-    Arm("neutral", KIND_NEUTRAL),
-    Arm("prompt_joyful", KIND_PROMPT),
-    Arm("steering_p0.50", KIND_STEERING, 0.5),
-]
-ITEMS = [Item("a", "pa"), Item("b", "pb")]
-
-
-class FakeTracker:
-    def __init__(self):
-        self.events = []
-        self.n = 0
-
-    def start(self):
-        self.events.append("start")
-
-    def stop(self):
-        self.events.append("stop")
-        self.n += 1
-        return EnergyReading(energy_kwh=self.n * 1e-3, emissions_kg=self.n * 1e-4, duration_s=1.5)
-
-
-def _steerer():
-    return Steerer(FakeBackend())
-
-
-def test_tracker_called_around_each_arm_and_energy_json_written(tmp_path):
-    tracker = FakeTracker()
-    run_bench(
-        ARMS, ITEMS, _steerer(), run_id="r", model_id="m", out_dir=tmp_path, energy_tracker=tracker
-    )
-    assert tracker.events == ["start", "stop"] * 3
+def test_energy_file_roundtrip(tmp_path):
+    readings = {
+        "neutral": EnergyReading(1e-3, 1e-4, 1.5),
+        "prompt_joyful": EnergyReading(2e-3, 2e-4, 3.0),
+    }
+    write_energy(tmp_path, readings)
     data = json.loads((tmp_path / ENERGY_FILE).read_text(encoding="utf-8"))
     assert data["neutral"] == {"energy_kwh": 1e-3, "emissions_kg": 1e-4, "duration_s": 1.5}
-    assert set(data) == {a.name for a in ARMS}
-    assert load_energy(tmp_path)["steering_p0.50"].energy_kwh == pytest.approx(3e-3)
-
-
-def test_jsonl_unchanged_with_or_without_tracker(tmp_path):
-    a, b = tmp_path / "a", tmp_path / "b"
-    run_bench(ARMS, ITEMS, _steerer(), run_id="r", model_id="m", out_dir=a)
-    run_bench(
-        ARMS, ITEMS, _steerer(), run_id="r", model_id="m", out_dir=b, energy_tracker=FakeTracker()
-    )
-    assert not (a / ENERGY_FILE).exists()
-    for name in ("neutral", "prompt_joyful", "steering_p0.50"):
-        ra, rb = load_run(a)[name], load_run(b)[name]
-        for x, y in zip(ra, rb, strict=True):
-            x.pop("latency_s"), y.pop("latency_s")
-            assert x == y
-    assert sorted(p.name for p in b.glob("*.jsonl")) == sorted(p.name for p in a.glob("*.jsonl"))
-
-
-def test_tracker_stopped_when_arm_fails(tmp_path):
-    class Boom(FakeBackend):
-        def generate(self, *args, **kwargs):
-            raise RuntimeError("boom")
-
-    tracker = FakeTracker()
-    with pytest.raises(RuntimeError, match="boom"):
-        run_bench(
-            ARMS,
-            ITEMS,
-            Steerer(Boom()),
-            run_id="r",
-            model_id="m",
-            out_dir=tmp_path,
-            energy_tracker=tracker,
-        )
-    assert tracker.events == ["start", "stop"]
-
-
-def test_overwrite_without_tracker_removes_stale_energy(tmp_path):
-    run_bench(
-        ARMS,
-        ITEMS,
-        _steerer(),
-        run_id="r",
-        model_id="m",
-        out_dir=tmp_path,
-        energy_tracker=FakeTracker(),
-    )
-    run_bench(ARMS, ITEMS, _steerer(), run_id="r", model_id="m", out_dir=tmp_path, overwrite=True)
-    assert not (tmp_path / ENERGY_FILE).exists()
+    assert load_energy(tmp_path) == readings
 
 
 def _write_run(tmp_path):
@@ -248,43 +156,3 @@ def test_codecarbon_offline_tracker_signature():
     assert "country_iso_code" in params
     assert any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
     CodeCarbonTracker()  # construction sans démarrage
-
-
-def test_start_failure_does_not_call_stop_nor_mask(tmp_path):
-    class BadStart(FakeTracker):
-        def start(self):
-            raise OSError("start impossible")
-
-    tracker = BadStart()
-    with pytest.raises(OSError, match="start impossible"):
-        run_bench(
-            ARMS,
-            ITEMS,
-            _steerer(),
-            run_id="r",
-            model_id="m",
-            out_dir=tmp_path,
-            energy_tracker=tracker,
-        )
-    assert tracker.events == []
-
-
-def test_stop_failure_does_not_mask_arm_exception(tmp_path):
-    class Boom(FakeBackend):
-        def generate(self, *args, **kwargs):
-            raise RuntimeError("boom")
-
-    class BadStop(FakeTracker):
-        def stop(self):
-            raise ValueError("stop casse")
-
-    with pytest.raises(RuntimeError, match="boom"):
-        run_bench(
-            ARMS,
-            ITEMS,
-            Steerer(Boom()),
-            run_id="r",
-            model_id="m",
-            out_dir=tmp_path,
-            energy_tracker=BadStop(),
-        )

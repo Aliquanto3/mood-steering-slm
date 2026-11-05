@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from mood_steering.eval.resumable import read_rows
 from mood_steering.steering import Steerer
 
 _SPEC = importlib.util.spec_from_file_location(
@@ -158,7 +159,7 @@ def test_run_campaign_ecrit_trois_bras_et_reprend(tmp_path):
     items = prompts(2)
     assert rp.run_campaign(steerer, items, tmp_path)
     for arm in rp.ARMS:
-        rows = rp.load_rows(rp.arm_file(tmp_path, arm))
+        rows = read_rows(rp.arm_file(tmp_path, arm))
         assert [r["item_id"] for r in rows] == ["pulse000", "pulse001"]
     assert len(backend.calls) == 2 * len(rp.ARMS)
     # reprise : rien n'est régénéré
@@ -172,7 +173,7 @@ def test_run_campaign_reprend_apres_ligne_tronquee_et_agrandissement(tmp_path):
     path = rp.arm_file(tmp_path, "pulse")
     path.write_bytes(path.read_bytes() + b'{"arm": "pul')  # arrêt brutal en cours d'écriture
     assert rp.run_campaign(steerer, prompts(2), tmp_path)
-    rows = rp.load_rows(path)
+    rows = read_rows(path)
     assert [r["item_id"] for r in rows] == ["pulse000", "pulse001"]
     assert len(backend.calls) == 2 * len(rp.ARMS)  # le premier prompt n'a pas été refait
     assert path.read_text(encoding="utf-8").endswith("\n")
@@ -182,7 +183,7 @@ def test_run_campaign_arret_a_l_echeance(tmp_path):
     steerer, backend = make_steerer()
     done = rp.run_campaign(steerer, prompts(2), tmp_path, deadline=time.monotonic() - 1)
     assert done is False and backend.calls == []
-    assert rp.load_rows(rp.arm_file(tmp_path, "neutral")) == []
+    assert read_rows(rp.arm_file(tmp_path, "neutral")) == []
 
 
 def test_manifeste(tmp_path):
@@ -529,7 +530,7 @@ def test_run_campaign_reprise_avec_separateurs_unicode(tmp_path):
     steerer, backend = make_steerer()
     assert rp.run_campaign(steerer, prompts(1), tmp_path)
     path = rp.arm_file(tmp_path, "pulse")
-    row = rp.load_rows(path)[0]
+    row = read_rows(path)[0]
     row["output"] = "a b c\u0085d"
     raw = (json.dumps(row, ensure_ascii=False) + "\n").encode("utf-8")
     path.write_bytes(raw)
@@ -537,7 +538,7 @@ def test_run_campaign_reprise_avec_separateurs_unicode(tmp_path):
     assert rp.run_campaign(steerer, prompts(2), tmp_path)
     assert len(backend.calls) == n_calls + len(rp.ARMS)  # seul le prompt 2 est généré
     assert path.read_bytes().startswith(raw)
-    rows = rp.load_rows(path)
+    rows = read_rows(path)
     assert [r["item_id"] for r in rows] == ["pulse000", "pulse001"]
     assert rows[0]["output"] == "a b c\u0085d"
 
@@ -560,6 +561,49 @@ def test_run_campaign_reecriture_atomique_via_part(tmp_path, monkeypatch):
     n_calls = len(backend.calls)
     assert rp.run_campaign(steerer, prompts(1), tmp_path, arms=("neutral",))
     assert len(backend.calls) == n_calls  # rien de régénéré, .part résiduel écrasé
-    assert [r["item_id"] for r in rp.load_rows(path)] == ["pulse000"]
+    assert [r["item_id"] for r in read_rows(path)] == ["pulse000"]
     assert path.read_bytes().endswith(b"}\n")
     assert not path.with_name("neutral.jsonl.part").exists()
+
+
+def test_paired_and_positive_use_shared_stats():
+    from mood_steering.eval.stats import excludes_zero, paired_bootstrap_diff
+
+    a = {f"p{i}": [0.5 + 0.01 * i, 0.1] for i in range(30)}
+    b = {f"p{i}": [0.0, 0.1] for i in range(30)}
+    iv = rp.paired(a, 0, b, 0, n_boot=100, seed=0)
+    xs = [r[0] for r in a.values()]
+    ys = [r[0] for r in b.values()]
+    assert iv == paired_bootstrap_diff(xs, ys, n_boot=100, seed=0)
+    assert rp.positive(iv) and excludes_zero(iv, 1)
+    assert not rp.positive(rp.paired(a, 1, b, 1, n_boot=100, seed=0))  # écart nul
+    assert rp.paired({}, 0, b, 0, n_boot=100, seed=0) is None
+    assert not rp.positive(None)
+
+
+def test_main_report_only_relit_les_tons_sans_modele_ni_notation(tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    steerer, _ = make_steerer()
+    assert rp.run_campaign(steerer, prompts(2), out)
+    rows = rp.read_all(out)
+    summary = rp.analyse(rows, FakeScorer(), n_boot=50)
+    (out / "summary.json").write_text(
+        json.dumps(summary, default=lambda o: o.__dict__), encoding="utf-8"
+    )
+    (out / "runtime.json").write_text(
+        json.dumps({"git": "x", "device": "CPU", "llama_cpp": "0.3.36"}), encoding="utf-8"
+    )
+    import mood_steering.eval.tone as tone
+
+    def refuse(cls):
+        raise AssertionError("le classifieur ne doit pas être chargé en mode rapport seul")
+
+    monkeypatch.setattr(tone.ToneScorer, "from_huggingface", classmethod(refuse))
+    report = tmp_path / "rapport.md"
+    # ni vecteur, ni modèle, ni manifeste requis
+    assert rp.main(["--out", str(out), "--report-only", "--report", str(report)]) == 0
+    md = report.read_text(encoding="utf-8")
+    assert md.startswith("# H6") and "(n=2)" in md
+    again = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert again["tones"] == json.loads(json.dumps(summary["tones"]))
+    assert again["h6"]["lecture"] == summary["h6"]["lecture"]
