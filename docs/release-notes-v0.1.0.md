@@ -1,4 +1,4 @@
-# mood-steering-slm v0.1.0 (brouillon)
+# mood-steering-slm v0.1.0
 
 Premier lot : un démonstrateur d'expression d'humeur d'un petit modèle de langage par steering d'activations à l'inférence, comparé à un prompt de jeu de rôle. Il montre l'expression d'une humeur dans le texte, jamais un ressenti.
 
@@ -18,7 +18,7 @@ Premier lot : un démonstrateur d'expression d'humeur d'un petit modèle de lang
 
 ## Limites
 
-- Pôle négatif : 1 % de sorties dégénérées à −0,43, 19 % à −0,71, 49 % à −1 (boucles, refus d'assistant). Seule la dose −0,43 est propre.
+- Pôle négatif : 1 % de sorties dégénérées à −0,43, 19 % à −0,71, 49 % à −1 (boucles, refus d'assistant). −0,43 est la plus propre, mais pas exempte de sorties dégénérées.
 - Un seul axe (joie/tristesse), un modèle de cœur, génération gloutonne.
 - Campagne mesurée sur GPU (roue CUDA) ; la démo tourne sur CPU : répétition du 2026-11-05, environ 5 tokens par seconde et par colonne (trois colonnes en parallèle), 21 à 26 s pour 128 tokens, pôle négatif compris.
 - Poids, vecteurs et données ne sont pas dans le dépôt (voir les prérequis de `docs/demo.md`).
