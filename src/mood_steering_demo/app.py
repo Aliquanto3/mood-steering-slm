@@ -2,7 +2,8 @@
 
 Le démonstrateur montre l'expression d'une humeur (ton du texte), jamais un ressenti.
 
-Protocole ``GET /stream?prompt=...&dose=...&max_tokens=...&seed=...`` (``text/event-stream``).
+Protocole ``GET /stream?prompt=...&dose=...&max_tokens=...&seed=...&profile=...&rise=...
+&half_life=...`` (``text/event-stream``).
 Chaque événement est une ligne ``data: <JSON>`` suivie d'une ligne vide (JSON en ASCII :
 U+2028, U+2029 et U+0085 sortent échappés) :
 
@@ -12,6 +13,14 @@ U+2028, U+2029 et U+0085 sortent échappés) :
 - ``{"type":"end","arm":A}`` : fin du bras ;
 - ``{"type":"error","arm":A,"message":M}`` : échec du bras (pas de ``end`` ensuite) ;
 - ``{"type":"done"}`` : dernier événement, une fois les trois bras terminés.
+
+Profil de dose du bras steering (``profile``) : ``constant`` (défaut : la dose demandée à tout
+token, comportement historique) ou ``pulse`` (story 5.1 : montée linéaire de 0 à ``dose`` en
+``rise`` tokens, puis décroissance exponentielle de demi-vie ``half_life`` tokens ; ``dose``
+est alors le pic). En ``pulse``, l'événement ``start`` du bras steering porte
+``"profile":"pulse"`` (et ``dose`` = dose du token 0) et chaque événement ``token`` du bras
+steering porte ``"dose"`` : la dose réellement appliquée à ce token. En ``constant`` aucun
+champ n'est ajouté. Les bras neutre et prompt ignorent le profil.
 
 Bras ``A`` : ``neutral`` (dose 0, sans consigne), ``prompt_joyful`` (dose 0, prompt joyeux),
 ``steering`` (dose demandée, dans [-1, 1]). Dans un bras, l'ordre est start, tokens, end ;
@@ -41,6 +50,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.types import Receive, Scope, Send
 
+from mood_steering.schedule import pulse
 from mood_steering.steering import (
     DEFAULT_MAX_SCALE,
     JOYFUL_SYSTEM_PROMPT,
@@ -61,6 +71,9 @@ REGISTER = "expression d'humeur"
 STATIC_DIR = Path(__file__).parent / "static"
 MAX_TOKENS_LIMIT = 512
 MAX_PROMPT_CHARS = 2000
+PROFILES = ("constant", "pulse")
+DEFAULT_RISE = 24
+DEFAULT_HALF_LIFE = 32.0
 BUSY_MESSAGE = "une génération est déjà en cours ; réessayez quand elle est terminée"
 MEMORY_NOTE = (
     "trois instances du modèle (une par bras) ; les poids sont projetés en mémoire (mmap) "
@@ -167,31 +180,40 @@ def create_app(
             "register": REGISTER,
             "max_tokens_limit": MAX_TOKENS_LIMIT,
             "max_prompt_chars": MAX_PROMPT_CHARS,
+            "profiles": list(PROFILES),
+            "default_rise": DEFAULT_RISE,
+            "default_half_life": DEFAULT_HALF_LIFE,
             "memory_note": MEMORY_NOTE,
         }
 
-    def run_arm(arm, prompt, dose, max_tokens, seed, out: queue.Queue, stop) -> None:
+    def run_arm(arm, prompt, dose, max_tokens, seed, out: queue.Queue, stop, schedule=None) -> None:
         tokens = None
         try:
             fixed, system = arm_specs[arm]
             real_dose = dose if fixed is None else fixed
+            # le profil ne vaut que pour le bras steering ; sinon chemin historique
+            sched = schedule if arm == ARM_STEERING else None
             stream = steerers[arm].open_stream(
-                prompt, real_dose, system=system, max_tokens=max_tokens, seed=seed
+                prompt, real_dose, system=system, max_tokens=max_tokens, seed=seed, schedule=sched
             )
             tokens = iter(stream)
-            out.put(
-                {
-                    "type": "start",
-                    "arm": arm,
-                    "dose": real_dose,
-                    "fallback": stream.fallback,
-                    "label": ARM_LABELS[arm],
-                }
-            )
+            start = {
+                "type": "start",
+                "arm": arm,
+                "dose": stream.dose if sched is not None else real_dose,
+                "fallback": stream.fallback,
+                "label": ARM_LABELS[arm],
+            }
+            if sched is not None:
+                start["profile"] = "pulse"
+            out.put(start)
             for text in tokens:
                 if stop.is_set():  # client parti : arrêt coopératif entre deux tokens
                     break
-                out.put({"type": "token", "arm": arm, "text": text})
+                event = {"type": "token", "arm": arm, "text": text}
+                if sched is not None and stream.doses:
+                    event["dose"] = stream.doses[-1]  # dose posée pour le token qui vient de sortir
+                out.put(event)
             out.put({"type": "end", "arm": arm})
         except Exception as exc:  # un bras en échec ne doit pas bloquer les autres
             out.put({"type": "error", "arm": arm, "message": str(exc)})
@@ -214,11 +236,17 @@ def create_app(
         dose: float = Query(0.0),
         max_tokens: int = Query(128, ge=1, le=MAX_TOKENS_LIMIT),
         seed: int = Query(0),
+        profile: str = Query("constant"),
+        rise: float = Query(DEFAULT_RISE, ge=0, le=MAX_TOKENS_LIMIT),
+        half_life: float = Query(DEFAULT_HALF_LIFE, gt=0, le=MAX_TOKENS_LIMIT),
     ) -> StreamingResponse:
         if not prompt.strip():
             raise HTTPException(422, "prompt vide")
         if not -1.0 <= dose <= 1.0:
             raise HTTPException(422, f"dose hors de [-1, 1] : {dose!r}")
+        if profile not in PROFILES:
+            raise HTTPException(422, f"profil inconnu : {profile!r} (attendu : constant, pulse)")
+        schedule = pulse(rise, dose, half_life) if profile == "pulse" else None
         if not busy.acquire(blocking=False):
             raise HTTPException(409, BUSY_MESSAGE)
         generation = _Generation(busy)
@@ -231,7 +259,7 @@ def create_app(
                 generation.threads = [
                     threading.Thread(
                         target=run_arm,
-                        args=(arm, prompt, dose, max_tokens, seed, out, generation.stop),
+                        args=(arm, prompt, dose, max_tokens, seed, out, generation.stop, schedule),
                         daemon=True,
                     )
                     for arm in ARMS
