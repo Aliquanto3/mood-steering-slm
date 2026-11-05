@@ -305,7 +305,14 @@ def test_paired_report(tmp_path):
     assert set(rep["truncated"]) == {"ablation_a1"}
 
 
-def test_main_report_refuse_items_d_une_autre_source(tmp_path, monkeypatch):
+def _mmmlu_items(n):
+    return [
+        McqItem(f"mmmlu-fr:{i}", "Q ?", dict(zip("ABCD", "wxyz", strict=True)), "B", "s", "fr")
+        for i in range(n)
+    ]
+
+
+def test_main_report_refuse_items_d_une_autre_source(tmp_path, monkeypatch, capsys):
     import mood_steering.eval.datasets as datasets
 
     run_dir = tmp_path / "r"
@@ -314,7 +321,9 @@ def test_main_report_refuse_items_d_une_autre_source(tmp_path, monkeypatch):
         json.dumps({"n": 4, "item_sources": ["gmmlu-fr"]}), encoding="utf-8"
     )
     monkeypatch.setattr(antiloop, "RUNS_DIR", tmp_path)
-    monkeypatch.setattr(datasets, "load_global_mmlu_lite", lambda n: _items(n))  # repli MMMLU
+    monkeypatch.setattr(datasets, "load_global_mmlu_lite", lambda n: _mmmlu_items(n))
     with pytest.raises(SystemExit):
         antiloop.main(["--run-id", "r", "--report"])
+    err = capsys.readouterr().err
+    assert "mmmlu-fr" in err and "gmmlu-fr" in err
     assert not (run_dir / "paired.json").exists()
