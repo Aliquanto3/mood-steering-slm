@@ -244,3 +244,6 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 02:14 · 6.2 · dev · lancé (code et fumée seulement ; mesure complète après la campagne 3.5 pour ne pas lui prendre la tour) · —
 - 2026-11-05 02:18 · 6.2 · dev · code fini, 6 tests ; fumée OK (14 s, 2 items) ; mesure complète demande transformers>=5.22 (Qwen3.5 inconnu de 4.57) via un environnement --no-project · d0871df
 - 2026-11-05 02:18 · 6.2 · second-avis · lancé · —
+- 2026-11-05 02:21 · 6.2 · second-avis · 2 high (<|im_end|> absent des fins, réponse tronquée comptée juste), 2 medium (reprise, transformers), 4 low · —
+- 2026-11-05 02:21 · 6.2 · décision · extra ablation en transformers>=5.22.1, déclaré incompatible avec eval (uv conflicts), job CI extras scindé · —
+- 2026-11-05 02:21 · 6.2 · review · passe 1 lancée · —
