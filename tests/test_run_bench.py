@@ -426,6 +426,8 @@ def test_check_runtime_refuses_other_device(tmp_path):
     rb.check_runtime(tmp_path, {**rt, "git": "y"})
     with pytest.raises(ValueError, match="autre environnement"):
         rb.check_runtime(tmp_path, {**rt, "device": "CPU"})
+    # campagne complète : rapports reconstruits ailleurs sans refus
+    rb.check_runtime(tmp_path, {**rt, "device": "CPU"}, pending=False)
 
 
 def test_parse_args_without_docstring(monkeypatch):

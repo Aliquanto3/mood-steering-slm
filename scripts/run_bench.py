@@ -318,13 +318,15 @@ def check_manifest(out: Path, manifest: Mapping[str, Any], resume: bool) -> None
     path.write_text(json.dumps(manifest, ensure_ascii=False, indent=1), "utf-8", newline="\n")
 
 
-def check_runtime(out: Path, runtime: Mapping[str, Any]) -> None:
+def check_runtime(out: Path, runtime: Mapping[str, Any], pending: bool = True) -> None:
     """Refuse une reprise sous une autre version de llama-cpp-python ou un autre device.
 
     Le manifeste fige le protocole ; ``runs.jsonl`` garde l'environnement de chaque reprise.
+    ``pending`` à ``False`` (toutes les unités écrites, rien à générer) : rien à vérifier,
+    les rapports se reconstruisent sur une autre machine.
     """
     runs = Path(out) / "runs.jsonl"
-    if not runs.exists():
+    if not pending or not runs.exists():
         return
     now = (runtime.get("llama_cpp"), runtime.get("device"))
     for row in read_jsonl(runs):
@@ -1073,7 +1075,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.n_gpu_layers and not llama_cpp.llama_supports_gpu_offload():
         raise RuntimeError("--n-gpu-layers demandé mais roue llama-cpp-python sans GPU")
     runtime = {"llama_cpp": llama_cpp.__version__, "device": device, "git": _git_sha()}
-    check_runtime(args.out, runtime)
+    pending = not all(
+        p.exists() for spec in specs for _, _, p in model_units(spec, protocol, args.out)
+    )
+    check_runtime(args.out, runtime, pending)
 
     def backend_factory(spec: ModelSpec) -> LlamaCppBackend:
         return LlamaCppBackend(
