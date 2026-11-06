@@ -92,14 +92,14 @@ action_items:
     epic: 5
     action: "A4 mesure H7 sur le 4B en GPU, machine au repos (optionnel)"
     owner: "Anaël puis dev-story"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
   - id: "epic-5-retro-item-4-a5-story-v0-3-module-commun-jsonl-repren"
     epic: 5
     action: "A5 story v0.3 : module commun JSONL reprenable, bootstrap apparié, percentile
       ; critère de dose utile unique ; chemin d énergie mort retiré"
     owner: "orchestrateur"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
   - id: "epic-5-retro-item-5-a6-seuils-des-hypothèses-bonus-pré-enreg"
     epic: 5
@@ -126,12 +126,12 @@ action_items:
     action: "A9 PR chore/etat-run vers main ; suppression des branches worktree-agent-*
       et des branches distantes fusionnées"
     owner: "orchestrateur"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
   - id: "epic-6-retro-item-9-a2-relance-6-2-après-a1-pilote-10-items"
     epic: 6
     action: "A2 relance 6.2 après A1 : pilote 10 items à 2048 tokens (origine < 80
       % tronquées sinon 4096), n réduit, contrôle croisé slm-quality-bench chiffré"
     owner: "Anaël puis dev-story"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-05.md"

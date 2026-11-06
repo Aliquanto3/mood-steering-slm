@@ -352,3 +352,51 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-05 08:34 · run · rétro · epics 5 (accepted-with-open-items) et 6 (rejected, décision d'Anaël), 9 actions · —
 - 2026-11-05 20:51 · run · décision · A9 accordée par Anaël : PR chore/etat-run → main ; A1 marquée faite (PR #28) · —
 - 2026-11-05 20:51 · A2 · pilote · lancé (origine seule, n=10, 2048 tokens, GPU RTX 3050) · —
+- 2026-11-05 20:54 · run · fusion · #29 état du run vers main, MERGED vérifié ; branches de stories fusionnées supprimées (accord d'Anaël) · b20a656
+- 2026-11-05 20:54 · A5 · dev · lancé (Sonnet, worktree), cadrage story-a5-mise-en-commun.md · —
+- 2026-11-05 21:00 · A2 · pilote · origine 60 % tronquées [30 ; 90], n=10, 2048 tokens, ~54 s/item : sous 80 %, plafond 2048 retenu · —
+- 2026-11-05 21:00 · A2 · mesure · lancée (4 bras, n=50, 2048 tokens, GPU, ~3 h) · —
+- 2026-11-05 21:08 · A5 · dev · fini : 498 passés ; aucun verdict publié ne change (taille identique sur 18 bras, H5 bornes décalées de 0,01 à 0,05) · 3890be9
+- 2026-11-05 21:08 · A5 · second-avis · 0 high, 1 medium (stop() du traqueur d'énergie masque l'exception de l'unité), 6 low · 3890be9
+- 2026-11-05 21:08 · A5 · review · passe 1 lancée (Opus) · —
+- 2026-11-05 21:08 · A2 · contrôle croisé · slm-quality-bench wsp-20261104 think_on (plafond 4096) : tronquées 72,9 % (558/765) base, 43,2 % (333/770) wsp · —
+- 2026-11-05 21:13 · A5 · review · passe 1 (Opus) : medium et 1 low corrigés, 1 nit corrigé · 6966491
+- 2026-11-05 21:13 · A5 · review · passe 2 (Sonnet) : 0 Important · 5f1bdd1
+- 2026-11-05 21:13 · A5 · CI · verte (6 jobs) · 5f1bdd1
+- 2026-11-05 21:13 · A5 · fusion · #30 fusionnée, MERGED vérifié · b3bf8ef
+- 2026-11-05 22:15 · A2 · mesure · bras origine fini : 78 % tronquées (39/50) ; ordre du script : ablation 0,5, ablation 1,0, chirurgie · —
+- 2026-11-05 22:15 · run · décision · Anaël laisse le GPU à l'orchestrateur pour la nuit, autonomie sur tout ce qui est faisable · —
+- 2026-11-05 22:15 · A4 · dev · lancé (Sonnet, worktree) : --energy-repeats et ordre alterné, cadrage story-a4-energie-repetee.md ; pas de verdict H7 tant que A6 n'est pas décidé · —
+- 2026-11-05 22:26 · A4 · dev · fini : 514 passés ; --energy-repeats, ordre alterné, --tone-only (ajout) · d4dcb12
+- 2026-11-05 22:26 · A4 · second-avis · 0 high, 4 medium (IC bootstrap sous-couvrant sur K tours, tour 0 non comparable, compute_minutes gonflé, tour sans énergie sauté en silence), 5 low · d4dcb12
+- 2026-11-05 22:26 · A4 · review · passe 1 lancée (Opus) ; orientation : IC de Student sur les tours, tour 0 exclu des stats d'énergie (chauffe), nombre pair de tours mesurés · —
+- 2026-11-05 22:34 · A4 · review · passe 1 (Opus) : 4 medium et 4 low corrigés (IC de Student, tour 0 = chauffe, K impair) · 1d4d438
+- 2026-11-05 22:34 · A4 · review · passe 2 (Sonnet) : 0 constat · cf01767
+- 2026-11-05 22:34 · A4 · CI · verte (6 jobs) · cf01767
+- 2026-11-05 22:34 · A4 · fusion · #31 fusionnée, MERGED vérifié · 5372d6d
+- 2026-11-05 22:35 · A4 · décision · environnement de mesure dans le worktree mss-a4 (venv séparé, pour ne pas toucher au venv torch de A2) : llama-cpp-python 0.3.36 CUDA repris du cache uv (plus de roue cu124 publiée pour 0.3.36, l'index retombe sur une compilation qui échoue), codecarbon ; GPU détecté · —
+- 2026-11-06 00:23 · A2 · mesure · finie (n=50, 2048 tokens) : tronquées origine 0,78, ablation 0,5 0,70, ablation 1,0 0,62, chirurgie 0,70 ; écart apparié origine − ablation 1,0 = +0,16 [0,04 ; 0,28] (discordants 9/1), autres IC contiennent 0 · —
+- 2026-11-06 00:23 · A4 · pilote · refusé (plancher --n-tone >= 50 pour le 4B) ; mesure complète lancée, ses premières unités servent de pilote · —
+- 2026-11-06 00:27 · A2 · dev · rapport fini : ablation 1,0 +0,16 [0,06 ; 0,28], McNemar p=0,021 (non corrigé, Bonferroni 0,017 non passé) ; chirurgie et ablation 0,5 +0,08, IC contenant 0 ; contrôle croisé +0,297 [0,250 ; 0,344] ; ajout run_antiloop --report · 0c0bc0c
+- 2026-11-06 00:27 · A2 · second-avis · lancé · —
+- 2026-11-06 00:30 · A2 · second-avis · chiffres tous confirmés ; 4 medium (contrôle croisé apparié possible via question_hash, écart du bench hors de l'IC de la chirurgie, surinterprétation de l'ablation 1,0, agrégat bench mêlant le plafond rag 2048), 3 low ; incident : tentative de téléchargement HF par le second avis, sans écriture · 0c0bc0c
+- 2026-11-06 00:30 · A2 · review · passe 1 lancée (Opus) · —
+- 2026-11-06 00:30 · A4 · mesure · 1er bras 206 s, 3,45 Wh : non saturée ; 35 passes, fin estimée ~02 h 25 · —
+- 2026-11-06 00:37 · A2 · review · passe 1 (Opus) : 4 medium et 4 low corrigés ; contrôle croisé apparié hors rag +0,31 [0,28 ; 0,35] · ff109df
+- 2026-11-06 00:37 · A2 · review · passe 2 (Sonnet) : 0 Important, 1 nit corrigé · daf01d1
+- 2026-11-06 00:37 · A2 · CI · verte (6 jobs) · daf01d1
+- 2026-11-06 00:37 · A2 · fusion · #32 fusionnée, MERGED vérifié · 8297a0d
+- 2026-11-06 00:37 · epic 6 · attente humaine · verdict de l'epic 6 à revoir par Anaël : E6-2 tenu, E6-1 partiel (saturation 78 %, ablation 1,0 = indice non corrigé) · —
+- 2026-11-06 03:28 · A4 · décision · mesure GPU terminée (56/56 unités, 00:23 → 03:27) ; rapport brut data/runs/energie-a4/frugalite.md · —
+- 2026-11-06 03:28 · A4 · dev · lancé (rapport des résultats dans docs/rapport-frugalite.md) · —
+- 2026-11-06 03:29 · A4 · dev · fini (n_tone = 100 par bras et par tour, corrigé du cadrage) · 1a6e449
+- 2026-11-06 03:29 · A4 · second-avis · lancé · —
+- 2026-11-06 03:31 · A4 · second-avis · chiffres tous confirmés ; 5 medium (passages hors du bloc lecture effacés par une régénération, en-tête et verdict restés 0,8B, cause du surcoût du tour 0 non établie, CO2 et latence absolus manquants), 4 low · 1a6e449
+- 2026-11-06 03:31 · A4 · review · passe 1 lancée (Opus) · —
+- 2026-11-06 03:34 · A4 · review · passe 1 (Opus) : 5 medium et 3 low corrigés, 1 low écarté (séparateurs décimaux) · 3c76e4c
+- 2026-11-06 03:34 · A4 · review · passe 2 lancée (Sonnet) · —
+- 2026-11-06 03:35 · A4 · review · passe 2 (Sonnet) : 1 Important corrigé (durées du tour 0), vérifié par l'orchestrateur sur energy_units.json ; pas de passe 3 · a1c19ac
+- 2026-11-06 03:35 · A4 · PR · #33 ouverte · a1c19ac
+- 2026-11-06 03:37 · A4 · CI · verte (6 jobs) · a1c19ac
+- 2026-11-06 03:37 · A4 · fusion · PR #33 MERGED · d38f1b4
+- 2026-11-06 03:37 · run · ménage · worktrees mss-a2, mss-a4, mss-a5, mss-a4doc retirés ; branches fusionnées supprimées (locales et distantes) ; A9 marquée faite · —
