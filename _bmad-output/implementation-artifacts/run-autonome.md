@@ -391,3 +391,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-06 03:28 · A4 · dev · lancé (rapport des résultats dans docs/rapport-frugalite.md) · —
 - 2026-11-06 03:29 · A4 · dev · fini (n_tone = 100 par bras et par tour, corrigé du cadrage) · 1a6e449
 - 2026-11-06 03:29 · A4 · second-avis · lancé · —
+- 2026-11-06 03:31 · A4 · second-avis · chiffres tous confirmés ; 5 medium (passages hors du bloc lecture effacés par une régénération, en-tête et verdict restés 0,8B, cause du surcoût du tour 0 non établie, CO2 et latence absolus manquants), 4 low · 1a6e449
+- 2026-11-06 03:31 · A4 · review · passe 1 lancée (Opus) · —
