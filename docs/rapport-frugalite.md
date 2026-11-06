@@ -1,15 +1,14 @@
 # Rapport de frugalité (H7)
 
-> **Mesure courte, Qwen3.5-0.8B-Q4_K_M, CPU, n réduit.** Réductions de protocole : sorties de ton limitées à 64 tokens (cible 128), 10 prompts de ton (cible 100), 10 QCM (cible 200), modèles secondaires sans les phases tone_neutral, mcq, syco, syco_fixed. Ordre de grandeur seulement, pas un verdict. Expression d'humeur, pas ressenti.
+> **Deux mesures : mesure H7 répétée (A4) sur Qwen3.5-4B-Q4_K_M en GPU, 7 tours par bras, puis, plus bas, mesure courte sur Qwen3.5-0.8B-Q4_K_M en CPU, n réduit.** Pas de verdict H7 : seuils non pré-enregistrés (action A6). Réductions de la mesure courte de protocole : sorties de ton limitées à 64 tokens (cible 128), 10 prompts de ton (cible 100), 10 QCM (cible 200), modèles secondaires sans les phases tone_neutral, mcq, syco, syco_fixed. Ordre de grandeur seulement, pas un verdict. Expression d'humeur, pas ressenti.
 
 <!-- lecture -->
-**Lecture (rédigée à la main, conservée à la régénération).** Conditions de cette mesure : CPU partagé avec un autre agent (mesure 6.2 sur GPU et sa préparation), donc machine qui n'était pas au repos ; n = 10 générations par bras, une seule lecture CodeCarbon par bras, bras mesurés l'un après l'autre, si bien que leur ordre se confond avec la dérive de la charge.
+**Lecture (rédigée à la main, conservée à la régénération ; tout ce qui précède la section « H7 : coût du steering » est dans ce bloc).** Conditions de la mesure courte du 0,8B : CPU partagé avec un autre agent (mesure 6.2 sur GPU et sa préparation), donc machine qui n'était pas au repos ; n = 10 générations par bras, une seule lecture CodeCarbon par bras, bras mesurés l'un après l'autre, si bien que leur ordre se confond avec la dérive de la charge.
 
-- Énergie et CO2 : **pas d'écart détectable à cette résolution**. Les ratios inférieurs à 1 sont des lectures uniques, sans intervalle, et ne montrent pas une économie du steering.
+- Énergie et CO2 (0,8B, CPU) : **pas d'écart détectable à cette résolution**. Les ratios inférieurs à 1 sont des lectures uniques, sans intervalle, et ne montrent pas une économie du steering.
 - Latence : l'écart apparié par item exclut zéro pour chaque bras de steering, qui va de 0,05 à 0,14 s plus vite par génération que le prompt joyeux. C'est cohérent avec le prompt système du bras joyeux, plus long à traiter, mais avec une machine chargée et un ordre des bras non alterné, la mesure ne suffit pas à l'établir.
 
-Une conclusion demanderait une mesure sur une machine au repos, avec plusieurs lectures par bras et un ordre des bras alterné.
-<!-- /lecture -->
+Une conclusion demanderait une mesure sur une machine au repos, avec plusieurs lectures par bras et un ordre des bras alterné. La mesure A4 ci-dessous répond à cette condition de mesure sur le 4B (plusieurs lectures par bras, ordre alterné, GPU sans autre charge au lancement), sans donner de verdict.
 
 ## Méthode de la mesure A4 (appliquée)
 
@@ -30,18 +29,18 @@ uv run python scripts/run_bench.py --models 4b --tone-only --energy --energy-rep
 
 Source : rapport brut `frugalite.md` du dossier de sortie de la mesure (hors git). Énergie par génération exprimée en Wh (kWh x 1000) ; moyennes et IC95 de Student (t à 5 ddl) sur les tours 1 à 6, le tour 0 (chauffe, sorties notées) n'y entre pas.
 
-Énergie par génération, tours 1 à 6 :
+Énergie et CO2 par génération, tours 1 à 6 (CO2 en mg, kg x 1e6) :
 
-| Bras | Énergie/gén. (Wh) | IC95 (Wh) |
-|---|---|---|
-| neutral | 0,02952 | [0,02947 ; 0,02957] |
-| prompt_joyful | 0,02920 | [0,02911 ; 0,02929] |
-| steering_p0.43 | 0,02784 | [0,02777 ; 0,02791] |
-| steering_p0.71 | 0,02571 | [0,02566 ; 0,02575] |
-| steering_p1.00 | 0,02221 | [0,02212 ; 0,02229] |
-| steering_m0.43 | 0,03169 | [0,03159 ; 0,03178] |
-| steering_m0.71 | 0,03109 | [0,03102 ; 0,03116] |
-| steering_m1.00 | 0,03139 | [0,03129 ; 0,03149] |
+| Bras | Énergie/gén. (Wh) | IC95 (Wh) | CO2/gén. (mg) | IC95 (mg) |
+|---|---|---|---|---|
+| neutral | 0,02952 | [0,02947 ; 0,02957] | 1,654 | [1,652 ; 1,657] |
+| prompt_joyful | 0,02920 | [0,02911 ; 0,02929] | 1,636 | [1,631 ; 1,641] |
+| steering_p0.43 | 0,02784 | [0,02777 ; 0,02791] | 1,560 | [1,556 ; 1,564] |
+| steering_p0.71 | 0,02571 | [0,02566 ; 0,02575] | 1,441 | [1,438 ; 1,443] |
+| steering_p1.00 | 0,02221 | [0,02212 ; 0,02229] | 1,244 | [1,240 ; 1,249] |
+| steering_m0.43 | 0,03169 | [0,03159 ; 0,03178] | 1,776 | [1,771 ; 1,781] |
+| steering_m0.71 | 0,03109 | [0,03102 ; 0,03116] | 1,742 | [1,738 ; 1,746] |
+| steering_m1.00 | 0,03139 | [0,03129 ; 0,03149] | 1,759 | [1,754 ; 1,765] |
 
 Ratio d'énergie par génération face à `prompt_joyful`, apparié par tour (moyenne et IC95 de Student des 6 ratios ; le ratio de CO2 est identique) :
 
@@ -54,28 +53,29 @@ Ratio d'énergie par génération face à `prompt_joyful`, apparié par tour (mo
 | steering_m0.71 | x1,065 | [1,061 ; 1,069] |
 | steering_m1.00 | x1,075 | [1,071 ; 1,079] |
 
-Latence par mot, tour 0 seul (100 générations par bras, moyenne et IC95 bootstrap) :
+Latence, tour 0 seul (100 générations par bras, moyenne et IC95 bootstrap ; le surcoût est le ratio et la différence face à `prompt_joyful`, et l'écart apparié par item exclut zéro pour chaque bras de steering) :
 
-| Bras | Latence par mot (s/mot) | IC95 (s/mot) |
-|---|---|---|
-| neutral | 0,02657 | [0,02617 ; 0,02702] |
-| prompt_joyful | 0,02577 | [0,02539 ; 0,02619] |
-| steering_p0.43 | 0,02678 | [0,02631 ; 0,02726] |
-| steering_p0.71 | 0,02803 | [0,02701 ; 0,02943] |
-| steering_p1.00 | 0,02942 | [0,02853 ; 0,03039] |
-| steering_m0.43 | 0,02565 | [0,02531 ; 0,02600] |
-| steering_m0.71 | 0,02518 | [0,02487 ; 0,02550] |
-| steering_m1.00 | 0,02349 | [0,02317 ; 0,02382] |
+| Bras | Latence (s/gén.) | Surcoût de latence | Latence par mot (s/mot) | IC95 (s/mot) |
+|---|---|---|---|---|
+| neutral | 2,025 [1,954 ; 2,096] | - | 0,02657 | [0,02617 ; 0,02702] |
+| prompt_joyful | 2,000 [1,924 ; 2,072] | référence | 0,02577 | [0,02539 ; 0,02619] |
+| steering_p0.43 | 1,902 [1,809 ; 1,992] | x0,9511 ; -0,098 s | 0,02678 | [0,02631 ; 0,02726] |
+| steering_p0.71 | 1,759 [1,651 ; 1,862] | x0,8792 ; -0,242 s | 0,02803 | [0,02701 ; 0,02943] |
+| steering_p1.00 | 1,514 [1,391 ; 1,639] | x0,757 ; -0,486 s | 0,02942 | [0,02853 ; 0,03039] |
+| steering_m0.43 | 2,171 [2,127 ; 2,212] | x1,085 ; +0,170 s | 0,02565 | [0,02531 ; 0,02600] |
+| steering_m0.71 | 2,128 [2,072 ; 2,178] | x1,064 ; +0,128 s | 0,02518 | [0,02487 ; 0,02550] |
+| steering_m1.00 | 2,150 [2,095 ; 2,200] | x1,075 ; +0,150 s | 0,02349 | [0,02317 ; 0,02382] |
 
 ### Lecture
 
 Ces points sont une lecture des chiffres ci-dessus, pas un verdict.
 
-- Les ratios d'énergie suivent la latence, donc la longueur des sorties : les doses positives (p0.43 à p1.00) produisent des sorties plus courtes et consomment moins (x0,95 à x0,76), les doses négatives des sorties plus longues et consomment plus (x1,07 à x1,09). Ce n'est pas une économie du steering. La latence par mot est plus élevée sous steering positif (0,0294 s/mot à p1.00 contre 0,0258 pour `prompt_joyful`, soit environ +14 %), ce qui se rapproche du coût réel par token. Le comptage par mots est une approximation (pas de `n_tokens` dans le JSONL).
-- Les IC des tours 1 à 6 sont très étroits : ils mesurent la répétabilité de la machine, pas l'incertitude d'échantillonnage des items. Les mêmes prompts sont régénérés à chaque tour, avec des sorties en grande partie identiques.
-- Le tour 0 consomme plus que les tours suivants (neutral : 3,45e-05 kWh/gén. au tour 0 contre 2,95e-05 ensuite, soit environ +17 %) : chauffe, exclusion des statistiques justifiée. L'écart varie selon les bras (de l'ordre de +3 % à +17 %).
-- Bruit CPU : pendant le tour 0 (environ 00 h 23 à 00 h 50), la revue d'une autre story (A2) a fait tourner la suite de tests sur la même machine (de 00 h 30 à 00 h 45). Ce bruit touche le tour 0, donc le tableau de latence par mot et la colonne d'énergie du tour 0, pas les tours 1 à 6 qui fondent les statistiques d'énergie.
+- Les ratios d'énergie suivent la latence, donc la longueur des sorties : les doses positives (p0.43 à p1.00) produisent des sorties plus courtes et consomment moins (x0,95 à x0,76), les doses négatives des sorties plus longues et consomment plus (x1,065 à x1,085). Longueur moyenne au tour 0, en mots par génération : 52,6 à p1.00, 64,5 à p0.71, 70,9 à p0.43, 77,8 pour `prompt_joyful`, 76,4 pour neutral, 84,9 à m0.43, 85,0 à m0.71, 92,3 à m1.00. Ce n'est pas une économie du steering. La latence par mot est plus élevée sous steering positif (0,0294 s/mot à p1.00 contre 0,0258 pour `prompt_joyful`, soit environ +14 %, au tour 0 seul) ; un coût fixe par génération réparti sur des sorties plus courtes pourrait l'expliquer, ce qui n'est pas établi. Le comptage par mots est une approximation (pas de `n_tokens` dans le JSONL).
+- Les IC des tours 1 à 6 sont très étroits : ils mesurent la répétabilité de la machine, pas l'incertitude d'échantillonnage des items. Les mêmes prompts sont régénérés à chaque tour, et les sorties des tours 1 à 6 sont identiques à celles du tour 0 pour les 100 prompts de chacun des 8 bras (génération déterministe) : la durée totale d'un bras ne varie que de 0,2 à 0,9 s sur les 7 tours, tour 0 compris.
+- Le tour 0 consomme plus que les tours suivants (neutral : 3,45e-05 kWh/gén. au tour 0 contre 2,95e-05 ensuite, soit environ +17 %), alors que la durée de génération du tour 0 est presque la même (neutral : 202,5 s pour 100 générations contre 201,6 à 201,9 s ensuite) : la puissance moyenne lue au tour 0 est donc plus élevée. Cause non établie : chauffe ou charge CPU simultanée (point suivant). L'écart varie selon les bras (de +3 % à +17 %). L'exclusion du tour 0 des statistiques, prévue par le protocole, écarte les deux causes.
+- Bruit CPU : pendant le tour 0 (environ 00 h 23 à 00 h 50), la revue d'une autre story (A2) a fait tourner la suite de tests sur la même machine (de 00 h 30 à 00 h 45 environ, d'après le journal du run). Ce bruit touche le tour 0, donc le tableau de latence ci-dessus et l'énergie du tour 0 (rapport brut), pas les tours 1 à 6 qui fondent les statistiques d'énergie.
 - Pas de verdict H7 : les seuils des hypothèses bonus ne sont pas pré-enregistrés (action A6, décision d'Anaël). Ce rapport donne les mesures et leurs intervalles.
+<!-- /lecture -->
 
 ## H7 : coût du steering face au prompt joyeux
 
