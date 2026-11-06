@@ -126,7 +126,7 @@ action_items:
     action: "A9 PR chore/etat-run vers main ; suppression des branches worktree-agent-*
       et des branches distantes fusionnées"
     owner: "orchestrateur"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
   - id: "epic-6-retro-item-9-a2-relance-6-2-après-a1-pilote-10-items"
     epic: 6
