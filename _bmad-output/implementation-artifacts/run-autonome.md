@@ -389,3 +389,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-06 00:37 · epic 6 · attente humaine · verdict de l'epic 6 à revoir par Anaël : E6-2 tenu, E6-1 partiel (saturation 78 %, ablation 1,0 = indice non corrigé) · —
 - 2026-11-06 03:28 · A4 · décision · mesure GPU terminée (56/56 unités, 00:23 → 03:27) ; rapport brut data/runs/energie-a4/frugalite.md · —
 - 2026-11-06 03:28 · A4 · dev · lancé (rapport des résultats dans docs/rapport-frugalite.md) · —
+- 2026-11-06 03:29 · A4 · dev · fini (n_tone = 100 par bras et par tour, corrigé du cadrage) · 1a6e449
+- 2026-11-06 03:29 · A4 · second-avis · lancé · —
