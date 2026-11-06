@@ -395,3 +395,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-06 03:31 · A4 · review · passe 1 lancée (Opus) · —
 - 2026-11-06 03:34 · A4 · review · passe 1 (Opus) : 5 medium et 3 low corrigés, 1 low écarté (séparateurs décimaux) · 3c76e4c
 - 2026-11-06 03:34 · A4 · review · passe 2 lancée (Sonnet) · —
+- 2026-11-06 03:35 · A4 · review · passe 2 (Sonnet) : 1 Important corrigé (durées du tour 0), vérifié par l'orchestrateur sur energy_units.json ; pas de passe 3 · a1c19ac
+- 2026-11-06 03:35 · A4 · PR · #33 ouverte · a1c19ac
