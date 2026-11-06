@@ -11,9 +11,9 @@
 Une conclusion demanderait une mesure sur une machine au repos, avec plusieurs lectures par bras et un ordre des bras alterné.
 <!-- /lecture -->
 
-## Méthode de la mesure A4 (prévue, non encore lancée)
+## Méthode de la mesure A4 (appliquée)
 
-La mesure ci-dessous n'a qu'une lecture par bras, sur CPU partagé. L'action A4 de la rétro de l'epic 5 la reprend sur le modèle cœur (4B), en GPU, machine au repos, avec K lectures par bras et l'ordre des bras alterné :
+La mesure courte du 0,8B (section H7 ci-dessous) n'a qu'une lecture par bras, sur CPU partagé. L'action A4 de la rétro de l'epic 5 la reprend sur le modèle cœur (4B), en GPU, avec K lectures par bras et l'ordre des bras alterné. Commande lancée (chemins relatifs au dépôt ; modèles, vecteurs et sorties hors git) :
 
 ```
 uv run python scripts/run_bench.py --models 4b --tone-only --energy --energy-repeats 7 --n-gpu-layers -1 --cuda-dll-dir models/cuda-runtime --out data/runs/energie-a4 --no-judge
@@ -23,8 +23,59 @@ uv run python scripts/run_bench.py --models 4b --tone-only --energy --energy-rep
 - Tour 0 = génération notée (mêmes sorties qu'une mesure à K = 1) et chauffe, hors statistiques d'énergie ; les tours 1 à K-1 régénèrent les mêmes 100 prompts de ton sans notation (`{modèle}/tone_r{r}/{bras}.jsonl`) et ne servent qu'à l'énergie et à la latence. Une lecture CodeCarbon par bras et par tour, dans `energy_units.json` (clé `tone#r{r}` pour r > 0). Un tour commencé sans lecture (arrêt brutal) est remesuré en entier à la reprise ; un tour sans lecture est signalé au rapport.
 - Ordre des bras alterné à partir du tour 1 : tours impairs dans l'ordre des bras (neutre, prompt joyeux, steering), tours pairs dans l'ordre inverse. K doit être impair (nombre pair de tours mesurés, position moyenne de chaque bras équilibrée). La règle et K sont figés au manifeste ; le relevé de charge au lancement (utilisation GPU par `nvidia-smi`, charge CPU) est dans `runs.jsonl`.
 - Rapport : par bras, énergie et CO2 par génération (moyenne, IC95 de Student à K-2 ddl sur les K-1 tours mesurés : le bootstrap percentile sous-couvre sur si peu de tours) et ratio steering / `prompt_joyful` apparié par tour, même IC. Pas de verdict : les seuils de H7 ne sont pas pré-enregistrés (action A6).
-- Durée estimée : 5 bras (neutre, prompt joyeux, 3 doses de steering) x 7 tours = 35 passes de 100 générations de 128 jetons au plus. Sur la seule latence connue (0,8B, CPU : 1,3 s par génération de 64 jetons, soit une cinquantaine de jetons par seconde), un 4B en GPU à 40-60 jetons par seconde donne 3 à 5 min par passe, soit environ 1,75 à 3 h. Le premier tour affiche la durée réelle de chaque bras ; `--n-tone 50` divise la durée par deux (plancher du protocole).
-- Prérequis : `uv sync --extra frugal`, GPU sans autre charge (fermer toute autre mesure), vecteur du 4B dans `data/moods`.
+- Conditions réelles : lancement le 2026-11-06 à 00 h 23, fin à 03 h 27, sur un portable RTX 3050 (toutes les couches en GPU). 8 bras (neutre, prompt joyeux, 3 doses positives, 3 doses négatives) x 7 tours = 56 unités de mesure, 100 générations de ton par bras et par tour (`n_tone` = 100 au manifeste, 128 jetons au plus). Relevé de charge au lancement : GPU 0 % (0 MiB), CPU 4 %.
+- Prérequis : `uv sync --extra frugal`, GPU sans autre charge, vecteur du 4B dans `data/moods`.
+
+## Résultats de la mesure A4 (Qwen3.5-4B, GPU)
+
+Source : rapport brut `frugalite.md` du dossier de sortie de la mesure (hors git). Énergie par génération exprimée en Wh (kWh x 1000) ; moyennes et IC95 de Student (t à 5 ddl) sur les tours 1 à 6, le tour 0 (chauffe, sorties notées) n'y entre pas.
+
+Énergie par génération, tours 1 à 6 :
+
+| Bras | Énergie/gén. (Wh) | IC95 (Wh) |
+|---|---|---|
+| neutral | 0,02952 | [0,02947 ; 0,02957] |
+| prompt_joyful | 0,02920 | [0,02911 ; 0,02929] |
+| steering_p0.43 | 0,02784 | [0,02777 ; 0,02791] |
+| steering_p0.71 | 0,02571 | [0,02566 ; 0,02575] |
+| steering_p1.00 | 0,02221 | [0,02212 ; 0,02229] |
+| steering_m0.43 | 0,03169 | [0,03159 ; 0,03178] |
+| steering_m0.71 | 0,03109 | [0,03102 ; 0,03116] |
+| steering_m1.00 | 0,03139 | [0,03129 ; 0,03149] |
+
+Ratio d'énergie par génération face à `prompt_joyful`, apparié par tour (moyenne et IC95 de Student des 6 ratios ; le ratio de CO2 est identique) :
+
+| Bras | Ratio | IC95 |
+|---|---|---|
+| steering_p0.43 | x0,9536 | [0,9508 ; 0,9565] |
+| steering_p0.71 | x0,8804 | [0,8776 ; 0,8832] |
+| steering_p1.00 | x0,7605 | [0,7568 ; 0,7643] |
+| steering_m0.43 | x1,085 | [1,082 ; 1,089] |
+| steering_m0.71 | x1,065 | [1,061 ; 1,069] |
+| steering_m1.00 | x1,075 | [1,071 ; 1,079] |
+
+Latence par mot, tour 0 seul (100 générations par bras, moyenne et IC95 bootstrap) :
+
+| Bras | Latence par mot (s/mot) | IC95 (s/mot) |
+|---|---|---|
+| neutral | 0,02657 | [0,02617 ; 0,02702] |
+| prompt_joyful | 0,02577 | [0,02539 ; 0,02619] |
+| steering_p0.43 | 0,02678 | [0,02631 ; 0,02726] |
+| steering_p0.71 | 0,02803 | [0,02701 ; 0,02943] |
+| steering_p1.00 | 0,02942 | [0,02853 ; 0,03039] |
+| steering_m0.43 | 0,02565 | [0,02531 ; 0,02600] |
+| steering_m0.71 | 0,02518 | [0,02487 ; 0,02550] |
+| steering_m1.00 | 0,02349 | [0,02317 ; 0,02382] |
+
+### Lecture
+
+Ces points sont une lecture des chiffres ci-dessus, pas un verdict.
+
+- Les ratios d'énergie suivent la latence, donc la longueur des sorties : les doses positives (p0.43 à p1.00) produisent des sorties plus courtes et consomment moins (x0,95 à x0,76), les doses négatives des sorties plus longues et consomment plus (x1,07 à x1,09). Ce n'est pas une économie du steering. La latence par mot est plus élevée sous steering positif (0,0294 s/mot à p1.00 contre 0,0258 pour `prompt_joyful`, soit environ +14 %), ce qui se rapproche du coût réel par token. Le comptage par mots est une approximation (pas de `n_tokens` dans le JSONL).
+- Les IC des tours 1 à 6 sont très étroits : ils mesurent la répétabilité de la machine, pas l'incertitude d'échantillonnage des items. Les mêmes prompts sont régénérés à chaque tour, avec des sorties en grande partie identiques.
+- Le tour 0 consomme plus que les tours suivants (neutral : 3,45e-05 kWh/gén. au tour 0 contre 2,95e-05 ensuite, soit environ +17 %) : chauffe, exclusion des statistiques justifiée. L'écart varie selon les bras (de l'ordre de +3 % à +17 %).
+- Bruit CPU : pendant le tour 0 (environ 00 h 23 à 00 h 50), la revue d'une autre story (A2) a fait tourner la suite de tests sur la même machine (de 00 h 30 à 00 h 45). Ce bruit touche le tour 0, donc le tableau de latence par mot et la colonne d'énergie du tour 0, pas les tours 1 à 6 qui fondent les statistiques d'énergie.
+- Pas de verdict H7 : les seuils des hypothèses bonus ne sont pas pré-enregistrés (action A6, décision d'Anaël). Ce rapport donne les mesures et leurs intervalles.
 
 ## H7 : coût du steering face au prompt joyeux
 
