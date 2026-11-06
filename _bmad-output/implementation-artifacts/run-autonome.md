@@ -397,3 +397,5 @@ Une ligne par étape : `- AAAA-MM-JJ HH:MM · story · étape · résultat · co
 - 2026-11-06 03:34 · A4 · review · passe 2 lancée (Sonnet) · —
 - 2026-11-06 03:35 · A4 · review · passe 2 (Sonnet) : 1 Important corrigé (durées du tour 0), vérifié par l'orchestrateur sur energy_units.json ; pas de passe 3 · a1c19ac
 - 2026-11-06 03:35 · A4 · PR · #33 ouverte · a1c19ac
+- 2026-11-06 03:37 · A4 · CI · verte (6 jobs) · a1c19ac
+- 2026-11-06 03:37 · A4 · fusion · PR #33 MERGED · d38f1b4

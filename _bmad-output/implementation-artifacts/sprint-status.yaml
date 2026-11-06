@@ -92,7 +92,7 @@ action_items:
     epic: 5
     action: "A4 mesure H7 sur le 4B en GPU, machine au repos (optionnel)"
     owner: "Anaël puis dev-story"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-05.md"
   - id: "epic-5-retro-item-4-a5-story-v0-3-module-commun-jsonl-repren"
     epic: 5
