@@ -22,3 +22,17 @@ Source : rétro de l'epic 5, constat F14 et action A4 (« mesurer H7 sur le 4B e
 - **Given** un `energy_units.json` d'un run existant (K = 1, ex. `data/runs/energie-5-3`), **When** on régénère le rapport, **Then** il est relu sans erreur et le rapport est inchangé hors mention de K.
 - **Given** K lectures par bras, **When** le rapport H7 est produit, **Then** il donne moyenne et IC95 par bras et un ratio apparié par tour face à `prompt_joyful`, sans verdict.
 - Tests sans modèle réel ni CodeCarbon réel (traqueur simulé) ; `uv run pytest -q --tb=short`, `uv run ruff check .`, `uv run ruff format --check .` verts.
+
+## Revue
+
+### Passe 1 (2026-11-06, SHA revu 1a6e449) : story documentaire (résultats A4 dans `docs/rapport-frugalite.md`, `docs/rapport-verdict.md`)
+
+- Important, medium, second avis : méthode, résultats et lecture A4 hors du bloc `<!-- lecture -->`, effacés par une régénération (`write_frugality_report` ne garde que ce bloc) ; corrigé (bloc étendu jusqu'avant la section H7, vérifié par `preserved_lecture`), 3c76e4c.
+- Important, medium, second avis : en-tête et lecture du 0,8B ignorent le 4B ; corrigé (en-tête à deux mesures, A4 répond à la condition de mesure, sans verdict), 3c76e4c.
+- Important, medium, second avis : `rapport-verdict.md` H7 « aucun écart d'énergie détectable » sans préciser le 0,8B ; corrigé (0,8B CPU et 4B GPU distingués, sans verdict), 3c76e4c.
+- Important, medium, second avis : surcroît du tour 0 attribué à la chauffe alors que sa durée égale celle des tours suivants (202,5 s contre 201,6 à 201,9 s) ; corrigé (puissance plus élevée, cause non établie : chauffe ou charge CPU, journal du run cité), 3c76e4c.
+- Important, medium, second avis : décision 5, CO2/gén., latence par génération et surcoût de latence absents ; corrigé (colonnes ajoutées depuis le rapport brut, latence du tour 0 seul), 3c76e4c.
+- Nit, low, second avis : « sorties en grande partie identiques » ; corrigé (identiques au tour 0 pour 100/100 prompts, 8 bras, 6 tours, vérifié sur les JSONL), 3c76e4c.
+- Nit, low, second avis : « x1,07 à x1,09 » et longueurs non chiffrées ; corrigé (x1,065 à x1,085, mots/gén. recalculés : 52,6 à 92,3), 3c76e4c.
+- Nit, low, second avis : « +14 % se rapproche du coût réel par token » non étayé ; corrigé (tour 0 seul, coût fixe par génération possible, non établi), 3c76e4c.
+- Nit, low, second avis : virgules décimales dans les tableaux rédigés, points dans les tableaux générés ; rejeté (le texte rédigé suit la convention française du dépôt, les tableaux générés viennent du code).
